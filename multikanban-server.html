@@ -3761,9 +3761,10 @@ async function _buildEmailCardView(c,cont){
   // Anhänge der aktiven Vorlage
   const attSec=_dbSec(cont,'Anhänge (aus aktiver Vorlage)');
   const selAtts=new Set();
+  const selAttsMap={}; // id→{id,name} für Vorschau
   async function _refreshAttChips(cardId){
     attSec.querySelectorAll('.ec-att-wrap').forEach(x=>x.remove());
-    selAtts.clear();
+    selAtts.clear();Object.keys(selAttsMap).forEach(k=>delete selAttsMap[k]);
     if(!cardId)return;
     let tc;try{tc=await api('GET','/cards/'+cardId);}catch{return;}
     const directAtts=(tc.attachments||[]).filter(a=>a.name&&a.id);
@@ -3780,8 +3781,8 @@ async function _buildEmailCardView(c,cont){
       chip.title=a.name+(a.size?' ('+_fmtBytes(a.size)+')':'');
       chip.innerHTML=`<span>${ext}</span><span style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>`;
       chip.onclick=()=>{
-        if(selAtts.has(a.id)){selAtts.delete(a.id);chip.style.cssText=chip.style.cssText.replace(/background:[^;]+/,'background:var(--bg2)').replace(/color:[^;]+/,'color:var(--muted)').replace(/border-color:[^;]+/,'border-color:var(--border)');}
-        else{selAtts.add(a.id);chip.style.background='var(--acc)';chip.style.color='#fff';chip.style.borderColor='var(--acc)';}
+        if(selAtts.has(a.id)){selAtts.delete(a.id);delete selAttsMap[a.id];chip.style.cssText=chip.style.cssText.replace(/background:[^;]+/,'background:var(--bg2)').replace(/color:[^;]+/,'color:var(--muted)').replace(/border-color:[^;]+/,'border-color:var(--border)');}
+        else{selAtts.add(a.id);selAttsMap[a.id]=a.name||'?';chip.style.background='var(--acc)';chip.style.color='#fff';chip.style.borderColor='var(--acc)';}
       };
       wrap.appendChild(chip);
     });
@@ -3958,10 +3959,10 @@ async function _buildEmailCardView(c,cont){
     const subject=_fillTemplate(subjectTpl,data)||'(kein Betreff)';
     const bodyHtml=marked.parse(_fillTemplate(bodyTpl,data),{breaks:true});
 
-    // Anhang aus Ausgabe-Karte
+    // Anhang aus Ausgabe-Karte + statische
     const dokFiles=ausgabeRef?.files||[];
     const dokFile=dokFiles.find(f=>f.position===origIdx);
-    const fixedAtts=[...selAtts];
+    const fixedAtts=Object.entries(selAttsMap).map(([id,name])=>({id,name}));
 
     prevPanel.innerHTML='';
 
@@ -3994,17 +3995,17 @@ async function _buildEmailCardView(c,cont){
     bodyDiv.innerHTML=bodyHtml;
     prevPanel.appendChild(bodyDiv);
 
-    // Anhang
-    if(dokFile){
-      const attDiv=el('div','');attDiv.style.cssText='padding:6px 10px;background:var(--bg3);border-top:1px solid var(--border);font-size:.75rem';
-      const nameSpan=el('span','');nameSpan.textContent=dokFile.name;nameSpan.style.cssText='cursor:pointer;text-decoration:underline;color:var(--acc)';
-      nameSpan.onclick=()=>dlAtt({url:'/attachments/'+dokFile.attId+'/file',name:dokFile.name});
-      attDiv.append(document.createTextNode('📎 '),nameSpan);
-      if(fixedAtts.length)attDiv.append(document.createTextNode(' + '+fixedAtts.length+' fester Anhang'));
-      prevPanel.appendChild(attDiv);
-    }else if(fixedAtts.length){
-      const attDiv=el('div','');attDiv.style.cssText='padding:6px 10px;background:var(--bg3);border-top:1px solid var(--border);font-size:.75rem';
-      attDiv.textContent='📎 '+fixedAtts.length+' Anhang/Anhänge (fest)';
+    // Anhänge: dok-Datei + statische (mit Namen)
+    const allAtts=[...(dokFile?[{id:dokFile.attId,name:dokFile.name,url:'/attachments/'+dokFile.attId+'/file'}]:[]),...fixedAtts.map(a=>({id:a.id,name:a.name}))];
+    if(allAtts.length){
+      const attDiv=el('div','');attDiv.style.cssText='padding:6px 10px;background:var(--bg3);border-top:1px solid var(--border);font-size:.75rem;display:flex;flex-wrap:wrap;gap:6px;align-items:center';
+      attDiv.append(document.createTextNode('📎 '));
+      allAtts.forEach((a,i)=>{
+        if(i)attDiv.append(document.createTextNode(' · '));
+        const sp=el('span','');sp.textContent=a.name;
+        if(a.url){sp.style.cssText='cursor:pointer;text-decoration:underline;color:var(--acc)';sp.onclick=()=>dlAtt({url:a.url,name:a.name});}
+        attDiv.appendChild(sp);
+      });
       prevPanel.appendChild(attDiv);
     }
   }
@@ -4013,22 +4014,24 @@ async function _buildEmailCardView(c,cont){
     if(!tplRef.value){toast('Keine Vorlage gewählt');return;}
     const acc=accounts.find(a=>a.id===accSel.value);
     if(!acc){toast('Kein Absenderkonto gewählt');return;}
-    const to=acc.from_address||acc.smtp_user||'';
     if(!_prevTplCard){toast('Vorlage nicht geladen');return;}
+    const melIdx=rowsSec._melIdx??-1;
+    const row=rowsSec._rows[origIdx];
+    const to=melIdx>=0&&row?row[melIdx]||'':'';
+    if(!to){toast('Kein Empfänger in dieser Zeile');return;}
+    const cols=rowsSec._cols||[];
+    const data={datum:new Date().toLocaleDateString('de-DE')};
+    cols.forEach((col,i)=>{data[col]=row[i]??'';data[col.toLowerCase()]=row[i]??'';});
     const tplCs=JSON.parse(_prevTplCard.cardSettings||'{}');
     const subjectTpl=(tplCs.mailSubject||'').trim();
     if(!subjectTpl){toast('Kein Betreff in Vorlage');return;}
-    const row=rowsSec._rows[origIdx];const cols=rowsSec._cols||[];
-    const data={datum:new Date().toLocaleDateString('de-DE')};
-    cols.forEach((col,i)=>{data[col]=row[i]??'';data[col.toLowerCase()]=row[i]??'';});
     const subject=_fillTemplate(subjectTpl,data);
     const bodyText=_fillTemplate(_prevTplCard.notes||'',data);
     const bodyHtml=marked.parse(bodyText,{breaks:true});
     const dokFiles=ausgabeRef?.files||[];
     const dokFile=dokFiles.find(f=>f.position===origIdx);
-    const attIds=dokFile?[dokFile.attId]:[...selAtts];
-    if(!confirm(`Test-Email an: ${to}\nBetreff: ${subject}`))return;
-    try{await api('POST','/mail/composer/send',{account_id:accSel.value,to,subject,body:bodyText,html_body:bodyHtml,attachment_ids:attIds});toast('Test-Email gesendet');}
+    const attIds=[...(dokFile?[dokFile.attId]:[]),...selAtts];
+    try{await api('POST','/mail/composer/send',{account_id:accSel.value,to,subject,body:bodyText,html_body:bodyHtml,attachment_ids:attIds});toast('✉ Test an '+to);}
     catch(e){toast('Fehler: '+(e.message||'?'));}
   }
 
@@ -4110,9 +4113,10 @@ async function _doSeriesSend(c,srcSel,tplSel,accSel,selAtts,rowsSec,accounts,isT
   // targetRows mit Originalindex, damit Dok-Anhang per Position passt
   let targetRows; // [{row, origIdx}]
   if(isTest){
-    targetRows=[{row:rowsSec._rows[0],origIdx:0}];
-    const testTo=acc?.from_address||acc?.smtp_user||'(leer)';
-    if(!confirm(`Test-Email senden an: ${testTo}\n(Konto: ${acc?.name||aid})`))return;
+    // Angehakte Zeilen bestimmen Testempfänger; keine Haken = erste Zeile
+    const tchecked=[...rowsSec.querySelectorAll('tbody input[type=checkbox]:checked')].map(cb=>parseInt(cb.dataset.idx));
+    const tidxs=tchecked.length>0?tchecked:[0];
+    targetRows=tidxs.map(i=>({row:rowsSec._rows[i],origIdx:i}));
   }else{
     const checked=[...rowsSec.querySelectorAll('tbody input[type=checkbox]:checked')].map(cb=>parseInt(cb.dataset.idx));
     const hasSelection=checked.length>0&&checked.length<rowsSec._rows.length;
@@ -4133,20 +4137,20 @@ async function _doSeriesSend(c,srcSel,tplSel,accSel,selAtts,rowsSec,accounts,isT
   for(const {row,origIdx} of targetRows){
     const data={datum:new Date().toLocaleDateString('de-DE')};
     cols.forEach((col,i)=>{data[col]=row[i]??'';data[col.toLowerCase()]=row[i]??'';});
-    const to=isTest?(acc?.from_address||acc?.smtp_user||''):(row[melIdx]||'');
+    const to=row[melIdx]||'';
     if(!to){errors.push('Kein Empfänger');continue;}
     const subject=_fillTemplate(_subjectTpl,data);
     const bodyText=_fillTemplate(_bodyTpl,data);
     const bodyHtml=marked.parse(bodyText,{breaks:true});
-    // Pro-Zeile-Anhang aus Dok-Ausgabe; Fallback auf fest gewählte Anhänge
-    const rowAttIds=_hasDokAtt&&_dokAttMap[origIdx]!=null?[_dokAttMap[origIdx]]:fixedAttIds;
+    // Pro-Zeile-Anhang aus Dok-Ausgabe + statische Anhänge (beides)
+    const rowAttIds=[...(_hasDokAtt&&_dokAttMap[origIdx]!=null?[_dokAttMap[origIdx]]:[]),...fixedAttIds];
     try{
       await api('POST','/mail/composer/send',{account_id:aid,to,subject,body:bodyText,html_body:bodyHtml,attachment_ids:rowAttIds});
       sent++;
     }catch(e){errors.push(`${to}: ${e.message||'Fehler'}`);}
   }
   const total=targetRows.length;
-  if(isTest){toast(sent?`Test-Email an ${acc?.from_address||acc?.smtp_user} gesendet`:'Test fehlgeschlagen: '+(errors[0]||''));return;}
+  if(isTest){toast(sent?`✉ Test gesendet (${sent} Empfänger)`:'Test fehlgeschlagen: '+(errors[0]||''));return;}
   if(errors.length)toast(`${sent}/${total} gesendet — ${errors.length} Fehler: ${errors.slice(0,2).join(', ')}`);
   else toast(`${sent} E-Mail${sent===1?'':'s'} gesendet`);
 }
@@ -4503,8 +4507,9 @@ async function _buildSerienLinkCardView(c,cont){
   // Statische Anhänge aus Mail-Vorlage
   const attSec=_dbSec(cont,'Statische Anhänge (aus Mail-Vorlage)');
   const selAtts=new Set();
+  const selAttsMap={}; // id→name für Vorschau
   async function _refreshMailAtts(mailCardId){
-    attSec.querySelectorAll('.ec-att-wrap').forEach(x=>x.remove());selAtts.clear();
+    attSec.querySelectorAll('.ec-att-wrap').forEach(x=>x.remove());selAtts.clear();Object.keys(selAttsMap).forEach(k=>delete selAttsMap[k]);
     if(!mailCardId)return;
     let mc;try{mc=await api('GET','/cards/'+mailCardId);}catch{return;}
     const atts=[...(mc.attachments||[]),...Object.values(S.cards).filter(x=>x.parentCardId===mailCardId&&x.cardType==='file_card'&&x.attachments?.length).map(fc=>({...fc.attachments[0],name:fc.attachments[0].name||fc.title}))].filter(a=>a.id);
@@ -4514,7 +4519,7 @@ async function _buildSerienLinkCardView(c,cont){
       const ext=(a.name||'').split('.').pop().toLowerCase();
       const chip=el('span','');chip.style.cssText='display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:.72rem;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--muted);user-select:none';
       chip.title=a.name;chip.innerHTML=`<span>${ext}</span><span style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>`;
-      chip.onclick=()=>{if(selAtts.has(a.id)){selAtts.delete(a.id);chip.style.background='var(--bg2)';chip.style.color='var(--muted)';chip.style.borderColor='var(--border)';}else{selAtts.add(a.id);chip.style.background='var(--acc)';chip.style.color='#fff';chip.style.borderColor='var(--acc)';}};
+      chip.onclick=()=>{if(selAtts.has(a.id)){selAtts.delete(a.id);delete selAttsMap[a.id];chip.style.background='var(--bg2)';chip.style.color='var(--muted)';chip.style.borderColor='var(--border)';}else{selAtts.add(a.id);selAttsMap[a.id]=a.name||'?';chip.style.background='var(--acc)';chip.style.color='#fff';chip.style.borderColor='var(--acc)';}};
       wrap.appendChild(chip);
     });
     attSec.appendChild(wrap);
@@ -4560,6 +4565,7 @@ async function _buildSerienLinkCardView(c,cont){
     const bodyHtml=marked.parse(_fillTemplate(_slPrevTplCard.notes||'',data),{breaks:true});
     const dokFiles=ausgabeRef?.files||[];
     const dokFile=dokFiles.find(f=>f.position===origIdx);
+    const fixedAtts=Object.entries(selAttsMap).map(([id,name])=>({id,name}));
     prevPanel.innerHTML='';
     const navDiv=el('div','');navDiv.style.cssText='display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg3);border-bottom:1px solid var(--border)';
     if(rows.length>1){
@@ -4573,12 +4579,12 @@ async function _buildSerienLinkCardView(c,cont){
     pTest.onclick=async()=>{
       const acc=accounts.find(a=>a.id===accSel.value);if(!acc){toast('Kein Konto gewählt');return;}
       if(!_slPrevTplCard){toast('Vorlage nicht geladen');return;}
+      if(to==='–'||!to){toast('Kein Empfänger in dieser Zeile');return;}
       const subj=_fillTemplate((JSON.parse(_slPrevTplCard.cardSettings||'{}').mailSubject||'').trim(),data);
       if(!subj){toast('Kein Betreff in Vorlage');return;}
       const bodyText=_fillTemplate(_slPrevTplCard.notes||'',data);
-      const attIds=dokFile?[dokFile.attId]:[...selAtts];
-      if(!confirm(`Test-Email an: ${acc.from_address||acc.smtp_user}\nBetreff: ${subj}`))return;
-      try{await api('POST','/mail/composer/send',{account_id:accSel.value,to:acc.from_address||acc.smtp_user,subject:subj,body:bodyText,html_body:marked.parse(bodyText,{breaks:true}),attachment_ids:attIds});toast('Test-Email gesendet');}
+      const attIds=[...(dokFile?[dokFile.attId]:[]),...selAtts];
+      try{await api('POST','/mail/composer/send',{account_id:accSel.value,to,subject:subj,body:bodyText,html_body:marked.parse(bodyText,{breaks:true}),attachment_ids:attIds});toast('✉ Test an '+to);}
       catch(e){toast('Fehler: '+(e.message||'?'));}
     };
     navDiv.appendChild(pTest);prevPanel.appendChild(navDiv);
@@ -4590,16 +4596,17 @@ async function _buildSerienLinkCardView(c,cont){
     prevPanel.appendChild(subjDiv);
     const bodyDiv=el('div','md-body');bodyDiv.style.cssText='padding:8px 10px;font-size:.8rem;line-height:1.5;max-height:220px;overflow-y:auto;display:block';
     bodyDiv.innerHTML=bodyHtml;prevPanel.appendChild(bodyDiv);
-    if(dokFile){
-      const attDiv=el('div','');attDiv.style.cssText='padding:6px 10px;background:var(--bg3);border-top:1px solid var(--border);font-size:.75rem';
-      const ns=el('span','');ns.textContent=dokFile.name;ns.style.cssText='cursor:pointer;text-decoration:underline;color:var(--acc)';
-      ns.onclick=()=>dlAtt({url:'/attachments/'+dokFile.attId+'/file',name:dokFile.name});
-      attDiv.append(document.createTextNode('📎 '),ns);
-      if([...selAtts].length)attDiv.append(document.createTextNode(' + '+[...selAtts].length+' fester Anhang'));
+    const slAllAtts=[...(dokFile?[{id:dokFile.attId,name:dokFile.name,url:'/attachments/'+dokFile.attId+'/file'}]:[]),...fixedAtts.map(a=>({id:a.id,name:a.name}))];
+    if(slAllAtts.length){
+      const attDiv=el('div','');attDiv.style.cssText='padding:6px 10px;background:var(--bg3);border-top:1px solid var(--border);font-size:.75rem;display:flex;flex-wrap:wrap;gap:6px;align-items:center';
+      attDiv.append(document.createTextNode('📎 '));
+      slAllAtts.forEach((a,i)=>{
+        if(i)attDiv.append(document.createTextNode(' · '));
+        const sp=el('span','');sp.textContent=a.name;
+        if(a.url){sp.style.cssText='cursor:pointer;text-decoration:underline;color:var(--acc)';sp.onclick=()=>dlAtt({url:a.url,name:a.name});}
+        attDiv.appendChild(sp);
+      });
       prevPanel.appendChild(attDiv);
-    }else if([...selAtts].length){
-      const attDiv=el('div','');attDiv.style.cssText='padding:6px 10px;background:var(--bg3);border-top:1px solid var(--border);font-size:.75rem';
-      attDiv.textContent='📎 '+[...selAtts].length+' Anhang/Anhänge (fest)';prevPanel.appendChild(attDiv);
     }
   }
   prevBtn.onclick=async()=>{
