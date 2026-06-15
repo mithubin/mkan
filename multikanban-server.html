@@ -1691,8 +1691,8 @@
               <button class="mode-btn active" id="docFmtDocx" onclick="_docSetFmt('docx')">DOCX</button>
               <button class="mode-btn" id="docFmtPdf" onclick="_docSetFmt('pdf')">PDF</button>
             </div>
-            <div class="slbl">Dateiname-Template</div>
-            <input id="docFilename" class="fbar-inp" type="text" placeholder="z.B. anmeldung_{{name}}" style="width:100%;font-size:.8rem;box-sizing:border-box;margin-bottom:6px">
+            <div class="slbl">Dateiname (ohne Erweiterung)</div>
+            <input id="docFilename" class="fbar-inp" type="text" placeholder="{{dateiname}}" style="width:100%;font-size:.8rem;box-sizing:border-box;margin-bottom:6px">
             <div style="border-top:1px solid var(--border);margin:6px 0"></div>
             <div class="slbl">Datenquelle</div>
             <select id="docSrcSel" class="fbar-inp" style="width:100%;font-size:.78rem;margin-bottom:6px"></select>
@@ -3990,7 +3990,7 @@ async function _buildEmailCardView(c,cont){
     prevPanel.appendChild(subjDiv);
 
     // Body
-    const bodyDiv=el('div','md-body');bodyDiv.style.cssText='padding:8px 10px;font-size:.8rem;line-height:1.5;max-height:220px;overflow-y:auto';
+    const bodyDiv=el('div','md-body');bodyDiv.style.cssText='padding:8px 10px;font-size:.8rem;line-height:1.5;max-height:220px;overflow-y:auto;display:block';
     bodyDiv.innerHTML=bodyHtml;
     prevPanel.appendChild(bodyDiv);
 
@@ -4181,8 +4181,8 @@ async function _buildDocLinkCardView(c,cont){
   const fmtPdf=el('button','mode-btn'+(cs.outputFormat==='pdf'?' active':''));fmtPdf.textContent='PDF';
   fmtRow.append(fmtDocx,fmtPdf);fmtSec.appendChild(fmtRow);
 
-  const fnSec=_dbSec(cont,'Dateiname-Template');
-  const fnInp=el('input','');fnInp.type='text';fnInp.placeholder='z.B. anmeldung_{{name}}';
+  const fnSec=_dbSec(cont,'Dateiname (ohne Erweiterung)');
+  const fnInp=el('input','');fnInp.type='text';fnInp.placeholder='{{dateiname}}';
   fnInp.value=cs.filenameTemplate||'';
   fnInp.style.cssText='width:100%;font-size:.75rem;margin-top:3px;padding:3px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);box-sizing:border-box';
   fnSec.appendChild(fnInp);
@@ -4402,8 +4402,8 @@ async function _buildSerienLinkCardView(c,cont){
   fmtDocx.onclick=()=>{fmtDocx.classList.add('active');fmtPdf.classList.remove('active');_saveCs();};
   fmtPdf.onclick=()=>{fmtPdf.classList.add('active');fmtDocx.classList.remove('active');_saveCs();};
 
-  const fnSec=_dbSec(cont,'Dateiname-Template');
-  const fnInp=mkTxtInp('z.B. anmeldung_{{name}}',cs.filenameTemplate);
+  const fnSec=_dbSec(cont,'Dateiname (ohne Erweiterung)');
+  const fnInp=mkTxtInp('{{dateiname}}',cs.filenameTemplate);
   fnSec.appendChild(fnInp);
 
   const dokBtnRow=el('div','');dokBtnRow.style.cssText='display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap';
@@ -4588,7 +4588,7 @@ async function _buildSerienLinkCardView(c,cont){
     const subjDiv=el('div','');subjDiv.style.cssText='padding:8px 10px;border-bottom:1px solid var(--border)';
     subjDiv.innerHTML=`<div style="font-size:.72rem;color:var(--muted)">Betreff</div><div style="font-size:.82rem;font-weight:500">${subject}</div>`;
     prevPanel.appendChild(subjDiv);
-    const bodyDiv=el('div','md-body');bodyDiv.style.cssText='padding:8px 10px;font-size:.8rem;line-height:1.5;max-height:220px;overflow-y:auto';
+    const bodyDiv=el('div','md-body');bodyDiv.style.cssText='padding:8px 10px;font-size:.8rem;line-height:1.5;max-height:220px;overflow-y:auto;display:block';
     bodyDiv.innerHTML=bodyHtml;prevPanel.appendChild(bodyDiv);
     if(dokFile){
       const attDiv=el('div','');attDiv.style.cssText='padding:6px 10px;background:var(--bg3);border-top:1px solid var(--border);font-size:.75rem';
@@ -10012,8 +10012,8 @@ dok:`<table><tbody>
 <tr><td colspan="2" class="help-sec">Felder</td></tr>
 <tr><td><code>{{Spalte}}</code></td><td>Wert aus Datenzeile</td></tr>
 <tr><td><code>{{datum}}</code></td><td>heutiges Datum (auto)</td></tr>
-<tr><td colspan="2" class="help-sec">Dateiname-Template</td></tr>
-<tr><td colspan="2" style="font-family:monospace;font-size:.78rem;color:var(--text)">anmeldung_{{Name}}.docx</td></tr>
+<tr><td colspan="2" class="help-sec">Dateiname (ohne Erweiterung)</td></tr>
+<tr><td colspan="2" style="font-family:monospace;font-size:.78rem;color:var(--text)">anmeldung_{{Name}}</td></tr>
 <tr><td colspan="2" class="help-sec">Tipps</td></tr>
 <tr><td colspan="2" style="color:var(--muted);font-size:.7rem;line-height:1.55">
   <b>↓ Felder ins Dok</b>: schreibt alle Feldnamen als erste Zeile in die DOCX — Orientierung beim Schreiben, danach in OO wieder löschen.<br>
