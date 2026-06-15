@@ -1692,7 +1692,7 @@
               <button class="mode-btn" id="docFmtPdf" onclick="_docSetFmt('pdf')">PDF</button>
             </div>
             <div class="slbl">Dateiname-Template</div>
-            <input id="docFilename" class="fbar-inp" type="text" placeholder="z.B. anmeldung_{{name}}.docx" style="width:100%;font-size:.8rem;box-sizing:border-box;margin-bottom:6px">
+            <input id="docFilename" class="fbar-inp" type="text" placeholder="z.B. anmeldung_{{name}}" style="width:100%;font-size:.8rem;box-sizing:border-box;margin-bottom:6px">
             <div style="border-top:1px solid var(--border);margin:6px 0"></div>
             <div class="slbl">Datenquelle</div>
             <select id="docSrcSel" class="fbar-inp" style="width:100%;font-size:.78rem;margin-bottom:6px"></select>
@@ -4182,7 +4182,7 @@ async function _buildDocLinkCardView(c,cont){
   fmtRow.append(fmtDocx,fmtPdf);fmtSec.appendChild(fmtRow);
 
   const fnSec=_dbSec(cont,'Dateiname-Template');
-  const fnInp=el('input','');fnInp.type='text';fnInp.placeholder='z.B. anmeldung_{{name}}.docx';
+  const fnInp=el('input','');fnInp.type='text';fnInp.placeholder='z.B. anmeldung_{{name}}';
   fnInp.value=cs.filenameTemplate||'';
   fnInp.style.cssText='width:100%;font-size:.75rem;margin-top:3px;padding:3px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);box-sizing:border-box';
   fnSec.appendChild(fnInp);
@@ -4403,7 +4403,7 @@ async function _buildSerienLinkCardView(c,cont){
   fmtPdf.onclick=()=>{fmtPdf.classList.add('active');fmtDocx.classList.remove('active');_saveCs();};
 
   const fnSec=_dbSec(cont,'Dateiname-Template');
-  const fnInp=mkTxtInp('z.B. anmeldung_{{name}}.docx',cs.filenameTemplate);
+  const fnInp=mkTxtInp('z.B. anmeldung_{{name}}',cs.filenameTemplate);
   fnSec.appendChild(fnInp);
 
   const dokBtnRow=el('div','');dokBtnRow.style.cssText='display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap';
@@ -12606,7 +12606,7 @@ const _HELP_CHAPTERS = [
   <li><strong>Hilfe beim Einbauen</strong>: <em>↓ Felder ins Dokument</em> schreibt alle Feldnamen der Datenquelle als erste Zeile in die DOCX (grau, 9pt) — dann in OO in den richtigen Kontext verschieben und formatieren.</li>
   <li><strong>Datenquelle</strong>: wie bei Serienmail — <span class="help-badge">⊟ Tabelle</span> oder <span class="help-badge">⊞ Abfrage</span>.</li>
   <li><strong>Format</strong>: DOCX oder PDF (Toggle in der Sidebar). <code>{{datum}}</code> wird automatisch mit dem heutigen Datum befüllt.</li>
-  <li><strong>Dateiname-Template</strong>: z.B. <code>anmeldung_{{name}}.docx</code> — pro Zeile individueller Dateiname.</li>
+  <li><strong>Dateiname-Template</strong>: z.B. <code>anmeldung_{{name}}</code> — pro Zeile individueller Dateiname. Dateiendung (.docx/.pdf) wird automatisch ergänzt.</li>
 </ul>
 <div class="help-h3">Seriengenerierung</div>
 <div class="help-p"><strong>▶ Seriendokumente erstellen</strong>: Legt eine Ausgabe-Karte in derselben Spalte/Lane an (bei Wiederholung: Nummerierung <code>(2)</code>, <code>(3)</code>…). Pro Datenzeile entsteht eine Dateikarte als Kind — direkt downloadbar oder in OO weiter bearbeitbar.</div>

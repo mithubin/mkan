@@ -84,8 +84,8 @@ def _make_filename(template: str, row: dict, idx: int, ext: str) -> str:
     name = template
     for key, val in row.items():
         name = name.replace('{{' + key + '}}', re.sub(r'[^\w\-.]', '_', str(val or '')))
-    # Endung erzwingen
-    base = re.sub(r'\.(docx|pdf)$', '', name, flags=re.IGNORECASE)
+    # Endung erzwingen – vorhandene Endung immer entfernen (egal welche)
+    base = re.sub(r'\.[a-zA-Z0-9]{1,6}$', '', name)
     return f'{base}.{ext}'
 
 
@@ -568,11 +568,15 @@ def serienlink_docs(card_id: str, body: dict = Body(...), user_id: str = Depends
         if not indexed_rows:
             raise HTTPException(400, 'Keine Zeilen ausgewählt')
 
-        tpl_name = re.sub(r'\.(docx|pdf)$', '', tpl_board_card['title'] or 'Vorlage', flags=re.IGNORECASE)
+        # Ausgabe-Karte landet bei der Dok-Boardkarte (nicht bei der serienlink_card)
+        out_col_id = tpl_board_card['col_id']
+        out_lane_id = tpl_board_card['lane_id']
+
+        tpl_name = re.sub(r'\.[a-zA-Z0-9]{1,6}$', '', tpl_board_card['title'] or 'Vorlage')
         base_title = f'Ausgabe - {tpl_name}'
         existing = conn.execute(
             "SELECT title FROM cards WHERE board_id=? AND col_id=? AND lane_id=? AND title LIKE ?",
-            (card['board_id'], card['col_id'], card['lane_id'], base_title + '%'),
+            (card['board_id'], out_col_id, out_lane_id, base_title + '%'),
         ).fetchall()
         out_title = base_title if not existing else f'{base_title} ({len(existing) + 1})'
 
@@ -580,7 +584,7 @@ def serienlink_docs(card_id: str, body: dict = Body(...), user_id: str = Depends
         ts = now()
         pos_row = conn.execute(
             'SELECT MAX(position) AS m FROM cards WHERE col_id=? AND lane_id=? AND parent_card_id IS NULL',
-            (card['col_id'], card['lane_id']),
+            (out_col_id, out_lane_id),
         ).fetchone()
         out_pos = (pos_row['m'] or 0) + 1
         conn.execute(
@@ -590,7 +594,7 @@ def serienlink_docs(card_id: str, body: dict = Body(...), user_id: str = Depends
                 card_type, parent_card_id, card_mode, time_spent, created_at, updated_at, created_by,
                 card_settings)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (out_id, card['board_id'], card['col_id'], card['lane_id'], out_pos,
+            (out_id, card['board_id'], out_col_id, out_lane_id, out_pos,
              out_title, '', None, None, None, 0, None,
              'card', None, 'org', 0, ts, ts, user_id,
              json.dumps({'docSourceCardId': card_id})),
@@ -624,7 +628,7 @@ def serienlink_docs(card_id: str, body: dict = Body(...), user_id: str = Depends
                     color, bg_color, cover_path, points, points_max,
                     card_type, parent_card_id, card_mode, time_spent, created_at, updated_at, created_by)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (fc_id, card['board_id'], card['col_id'], card['lane_id'], orig_idx,
+                (fc_id, card['board_id'], out_col_id, out_lane_id, orig_idx,
                  fname, '', None, None, None, 0, None,
                  'file_card', out_id, 'org', 0, ts, ts, user_id),
             )
