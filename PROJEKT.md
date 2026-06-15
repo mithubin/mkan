@@ -66,6 +66,7 @@ Marktlücke: Nextcloud Deck (blass), Planka (keine Swimlanes), Notion (US-Cloud)
 | 29 | Dok-Modus: DOCX-Vorlage in OO, Platzhalter-Generierung, Seriendokumente (docs.py) | ✅ 2026-06-14 |
 | 30 | doclink_card (zentrales Dok-Hub), Labels+Assignees in mMetaRow, Enter=Vollbild | ✅ 2026-06-14 |
 | 31 | Unterkarten-Chips Badge-Spalten, Filter Tiefe, Badge-Farben (Admin), Board-Tab-Chrome aus DB, Alt+Klick Vollbild, Datei-Chips 22px, Dok/Wissen-Indikatoren Mini-Card | ✅ 2026-06-15 |
+| 32 | Serien-Hub (serienlink_card): kombinierter Dok+Mail-Hub, 2-Spalten-Layout, Chip-Scanning, log_card, Test-Email an Absender, UI-Feinschliff Sidebar | ✅ 2026-06-15 |
 
 ---
 
@@ -99,9 +100,10 @@ Marktlücke: Nextcloud Deck (blass), Planka (keine Swimlanes), Notion (US-Cloud)
 - Snapshots + Klassenbuch; SQLite-Backup/Restore; Board-ZIP-Download
 
 ### Serienfunktionen
-- **Serienmail** (✉ Mail-Template-Karte): Board-DB als Datenquelle → `{{feld}}`-Platzhalter → Massen-Versand per SMTP
-- **Seriendokumente** (Dok-Modus + ▤ Dok-Template-Karte): DOCX-Vorlage in OO bearbeiten → python-docx befüllt → Ausgabe-Dateikarten
-- **Board-DB**: Tabellen-Karten (CSV-Import), Abfrage-Karten (SQL), MD-Template-Karten
+- **Serien-Hub** (⊕ serienlink_card): kombinierter Hub — Datenquelle wählen, Dok erzeugen + Mail versenden in einem Modal; 2-Spalten-Layout; Chip-Scanning für verknüpfte Vorlagen; Versandprotokoll als log_card
+- **Serienmail** (✉ maillink_card): Board-DB als Datenquelle → `{{feld}}`-Platzhalter → Massen-Versand per SMTP
+- **Seriendokumente** (Dok-Modus + ▤ doclink_card): DOCX-Vorlage in OO bearbeiten → python-docx befüllt → Ausgabe-Dateikarten
+- **Board-DB**: Tabellen-Karten (CSV-Import), Abfrage-Karten (SQL), MD-Template-Karten, Log-Karten
 
 ### Werkzeuge
 - Excalidraw-Integration (iframe + postMessage-Bridge)
@@ -124,7 +126,7 @@ Marktlücke: Nextcloud Deck (blass), Planka (keine Swimlanes), Notion (US-Cloud)
 
 ## Offene Punkte
 
-### Serienfunktionen (Phase 29/30, weitgehend fertig)
+### Serienfunktionen (Phase 29–32, funktional vollständig)
 Noch offen:
 - Hilfe-Modal-Seite für Mail- und Dok-Serie: Schritt-für-Schritt-Anleitung mit Beispiel-Datenquelle
 - Briefkopf-Grafik in DOCX (Anhang → base64 → `<img>`) — aktuell: Text-Platzhalter

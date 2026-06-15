@@ -1,6 +1,6 @@
 # trello-klon-sv – Technische Referenz für Claude
 
-Stand: Phase 31 (2026-06-15). Phasenplan + Features → `PROJEKT.md`. Git: Branch `mkan`.
+Stand: Phase 32 (2026-06-15). Phasenplan + Features → `PROJEKT.md`. Git: Branch `mkan`.
 
 Live: `https://mkan.milan.how/`
 
@@ -185,9 +185,9 @@ Board-Indikatoren (Stand Phase 30): alle als CSS `::after`-Dreieck via `border`-
 - `selectedIndices`: Array ausgewählter Zeilen-Indices; `null` = alle
 - Ausgabe-Karte in gleicher Spalte/Lane wie doclink_card
 
-**DB-Karten-Typnamen (UI):** `▤ Dok-Template`, `✉ E-Mail-Template`, `⊡ MD-Template` — alle monochrom, kein farbiges Emoji.
+**DB-Karten-Typnamen (UI):** `▤ Dok-Template`, `✉ E-Mail-Template`, `⊡ MD-Template`, `⊕ Serien-Hub`, `📋 Log` — alle monochrom, kein farbiges Emoji.
 
-**DB-Karte Badges:** `badge-doc` = rot (`rgba(239,68,68,…)`, `#f87171`)
+**DB-Karte Badges:** `badge-doc` = rot (`rgba(239,68,68,…)`, `#f87171`); `badge-log` = blaugrau (`rgba(100,116,139,.1)`, `#94a3b8`)
 
 **Weitere Fixes Phase 30:**
 - `mTitle` blur → Auto-Save Kartentitel (kein Speichern-Button mehr nötig)
@@ -196,6 +196,50 @@ Board-Indikatoren (Stand Phase 30): alle als CSS `::after`-Dreieck via `border`-
 - SSE `card_created`: nutzt `mkDbCard()` + `.db-cell`-Selektor für DB-Kartentypen
 - Mode-Filter: Pill-Styling + Mail + Dok ergänzt
 - Enter-Taste öffnet Modal der Karte unter Mausfokus (`_hoveredCardId` via `mouseover`-Delegation)
+
+### Serien-Hub (serienlink_card) — Phase 32, 2026-06-15
+
+**Konzept:** Kombinierter Hub für Seriendokument-Erzeugung + Serienmail-Versand in einem Modal. Ersetzt den separaten Einsatz von doclink_card + maillink_card.
+
+**cardSettings:** `{dataSrcId, activeDokCardId, activeMailCardId, outputFormat:'docx'|'pdf', filenameTemplate, accountId}`
+
+**Layout (2-Spalten):**
+- Hilfe-Button links (`margin-left:15px`)
+- Datenquelle: Dropdown 30% Breite + `↻ Daten laden` inline (`margin-left:15px`)
+- Datentabelle (volle Breite, mit Checkboxen)
+- Zwei-Spalten-Grid: links Dok-Generierung, rechts Mail-Versand
+- Vorschau-Button + Panel ganz unten, volle Breite
+
+**Chip-Scanning (kein Dropdown):**
+- Dok: scannt `S.cards` nach `cardMode==='doc' && cardSettings.linkedDocCardId===hub.id`
+- Mail: scannt `S.cards` nach `cardMode==='email' && cardSettings.linkedEmailCardId===hub.id`
+- Aktive Karte: `activeDokCardId` / `activeMailCardId` als Closure-Variablen; `_saveCs()` persistiert in `cardSettings`
+- Reload-Button `↻` mit `margin-left:15px` (kein `float:right` — kollidiert mit Grid-Spalten)
+
+**origIdx-as-position:** `file_card.position = original row index` in der Datenquelle. Ermöglicht Zuordnung Dok-Anhang ↔ Datenzeile bei Checkbox-Selektion (`ausgabeRef.files.find(f=>f.position===origIdx)`).
+
+**ausgabeRef:** `{value: cardId, files: [{attId, name, position}]}` — Brücke zwischen Dok-Generierung (links) und Mail-Versand (rechts). Nach Generierung via `_refreshAusgabe(true)` befüllt.
+
+**selAttsMap:** `{id→name}` parallel zu `selAtts` (Set) — speichert Dateinamen statischer Anhänge für Vorschau ohne API-Call.
+
+**Test-Email:** `isTest=true` → checked Rows = Daten-Preview (mehrere möglich); Empfänger = Absender (`acc.from_address || acc.smtp_user`). Kein Versand an echte Empfänger.
+
+**Seriengenerierung:** `POST /cards/{id}/serienlink-docs` mit `{dokBoardCardId, dataSrcId, outputFormat, filenameTemplate, selectedIndices}`.
+- Ausgabe-Karte landet in col/lane der **Dok-Boardkarte** (nicht der serienlink_card)
+- `_make_filename()`: strip `\.[a-zA-Z0-9]{1,6}$` + korrekte Extension anhängen — Dateiname-Input immer ohne Erweiterung
+
+**log_card:** Nach realem Versand automatisch angelegt (gleiche col/lane wie serienlink_card). Enthält Protokolltext als `notes` + TXT-Anhang `versandlog.txt`. DB-Kategorie "Logs" in der DB-Spalte, ganz unten. Badge: `badge-log` (blaugrau).
+
+**Anhang-Vorschau Extension:** Extension-Span mit eigenem `color:var(--muted);opacity:.55` — nicht via `innerHTML`-opacity, da Parent-`color:var(--acc)` sonst überschreibt. Pattern: `sp.appendChild(document.createTextNode(base)); ext.style.cssText='color:var(--muted);opacity:.55'; sp.appendChild(ext)`.
+
+**Datenquellen-Warnung:** Rot (`rgba(239,68,68,.12)` / `rgba(220,38,38,.85)`), fett, **vor** dem Dropdown — Hinweis auf unveränderliche Zuordnung zwischen Dok-Erzeugung und Versand.
+
+**Gotcha:** `_saveCs()` referenziert `srcSel`, `fmtPdf`, `fnInp`, `accSel` via Closure. Alle als Sende-Handler aufgerufen, nie vor Deklaration — kein Problem. Aber nie `_saveCs` auf Modulebene aufrufen.
+
+**Routen (docs.py, prefix `/cards` in main.py):**
+- `POST /{id}/serienlink-docs` — Seriendokumente für serienlink_card
+- `GET /{id}/ausgabe-cards` — Liste vorhandener Ausgabe-Karten mit Datei-Infos (`[{id, title, fileCount, files:[{attId,name,position}]}]`)
+- `POST /{id}/doclink-series` — für doclink_card (älterer Typ)
 
 ### DB-Spalten (via `_migrate_db`)
 ```
