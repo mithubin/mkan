@@ -4333,15 +4333,17 @@ async function _buildSerienLinkCardView(c,cont){
   try{accounts=await api('GET','/mail/composer/accounts');}catch{}
 
   const dbSrcs=Object.values(S.cards).filter(x=>x.cardType==='table_card'||x.cardType==='query_card');
-  const dokCards=Object.values(S.cards).filter(x=>x.cardMode==='doc'&&x.cardType==='card');
-  const mailCards=Object.values(S.cards).filter(x=>x.cardMode==='email'&&x.cardType==='card');
 
   function mkSel(opts,val){const s=el('select','sl-inp');s.style.cssText='width:100%;font-size:.75rem;margin-top:3px';s.innerHTML=opts;s.value=val||'';return s;}
   function mkTxtInp(ph,val){const i=el('input','');i.type='text';i.placeholder=ph;i.value=val||'';i.style.cssText='width:100%;font-size:.75rem;margin-top:3px;padding:3px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);box-sizing:border-box';return i;}
   function secHdr(txt){const d=el('div','');d.style.cssText='font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:12px 0 5px;padding-top:8px;border-top:1px solid var(--border)';d.textContent=txt;return d;}
 
+  // aktive Karten-IDs (aus Chip-Scanning, nicht Dropdown)
+  let activeDokCardId=cs.activeDokCardId||'';
+  let activeMailCardId=cs.activeMailCardId||'';
+
   function _saveCs(){
-    const ns=JSON.stringify({dataSrcId:srcSel.value,activeDokCardId:dokSel.value,activeMailCardId:mailSel.value,outputFormat:fmtPdf.classList.contains('active')?'pdf':'docx',filenameTemplate:fnInp.value,accountId:accSel.value});
+    const ns=JSON.stringify({dataSrcId:srcSel.value,activeDokCardId,activeMailCardId,outputFormat:fmtPdf.classList.contains('active')?'pdf':'docx',filenameTemplate:fnInp.value,accountId:accSel.value});
     c.cardSettings=ns;api('PATCH','/cards/'+c.id,{cardSettings:ns}).catch(()=>{});
   }
 
@@ -4359,12 +4361,39 @@ async function _buildSerienLinkCardView(c,cont){
 
   // ── DOK ─────────────────────────────────────────────────────────────────────
   cont.appendChild(secHdr('Dok-Generierung (optional)'));
-  const dokGrid=el('div','');dokGrid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start';cont.appendChild(dokGrid);
 
-  const dokSelSec=_dbSec(dokGrid,'Dok-Vorlage (Boardkarte)');
-  const dokSel=mkSel('<option value="">– keine –</option>'+dokCards.map(d=>`<option value="${d.id}">${d.title}</option>`).join(''),cs.activeDokCardId);
-  dokSelSec.appendChild(dokSel);
+  // Chip: gekoppelte Dok-Boardkarten (linkedDocCardId === c.id)
+  const dokChipSec=_dbSec(cont,'Verknüpfte Dok-Vorlage');
+  const dokRefBtn=el('button','btn');dokRefBtn.textContent='↻';dokRefBtn.title='Neu laden';dokRefBtn.style.cssText='font-size:.68rem;padding:1px 5px;float:right';
+  dokChipSec.appendChild(dokRefBtn);
+  const dokChipWrap=el('div','');dokChipWrap.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;min-height:22px;align-items:center';
+  dokChipSec.appendChild(dokChipWrap);
 
+  function _renderDokChips(){
+    dokChipWrap.innerHTML='';
+    const linked=Object.values(S.cards).filter(bc=>{
+      if(DB_CARD_TYPES.includes(bc.cardType)||bc.cardType==='file_card')return false;
+      try{return bc.cardMode==='doc'&&JSON.parse(bc.cardSettings||'{}').linkedDocCardId===c.id;}catch{return false;}
+    }).sort((a,b)=>a.title.localeCompare(b.title,'de'));
+    if(!linked.length){
+      if(activeDokCardId){activeDokCardId='';_saveCs();}
+      const h=el('span','');h.style.cssText='font-size:.72rem;color:var(--muted)';h.textContent='Keine Dok-Karte verknüpft – in einer Dok-Karte diesen Hub koppeln';
+      dokChipWrap.appendChild(h);return;
+    }
+    if(!linked.find(bc=>bc.id===activeDokCardId)){activeDokCardId=linked[0].id;_saveCs();}
+    linked.forEach(bc=>{
+      const isAct=bc.id===activeDokCardId;
+      const chip=el('span','');
+      chip.style.cssText=`display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:10px;font-size:.73rem;border:1px solid ${isAct?'var(--acc)':'var(--border)'};background:${isAct?'var(--acc)':'var(--bg3)'};color:${isAct?'#fff':'var(--text)'};user-select:none`;
+      chip.innerHTML=(isAct?'✓ ':'')+`<span style="cursor:pointer">${bc.title}</span>`;
+      chip.querySelector('span').onclick=()=>{activeDokCardId=bc.id;_saveCs();_renderDokChips();};
+      const nav=el('span','');nav.textContent='↗';nav.style.cssText='cursor:pointer;opacity:.7;font-size:.8rem';nav.onclick=e=>{e.stopPropagation();openModal(bc.id);};
+      chip.appendChild(nav);dokChipWrap.appendChild(chip);
+    });
+  }
+  dokRefBtn.onclick=_renderDokChips;
+
+  const dokGrid=el('div','');dokGrid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start;margin-top:6px';cont.appendChild(dokGrid);
   const fmtSec=_dbSec(dokGrid,'Format');
   const fmtRow=el('div','');fmtRow.style.cssText='display:flex;gap:4px;margin-top:3px';
   const fmtDocx=el('button','mode-btn'+(cs.outputFormat!=='pdf'?' active':''));fmtDocx.textContent='DOCX';
@@ -4405,14 +4434,14 @@ async function _buildSerienLinkCardView(c,cont){
   }
 
   genBtn.onclick=async()=>{
-    if(!dokSel.value){toast('Keine Dok-Vorlage gewählt');return;}
+    if(!activeDokCardId){toast('Keine Dok-Vorlage verknüpft');return;}
     if(!srcSel.value){toast('Keine Datenquelle gewählt');return;}
     const selectedIndices=_getCheckedIndices(rowsSec);
     if(selectedIndices!==null&&!selectedIndices.length){toast('Keine Zeilen ausgewählt');return;}
     const orig=genBtn.textContent;genBtn.disabled=true;genBtn.textContent='⏳ Generiere…';
     try{
       const r=await api('POST','/cards/'+c.id+'/serienlink-docs',{
-        dokBoardCardId:dokSel.value,dataSrcId:srcSel.value,
+        dokBoardCardId:activeDokCardId,dataSrcId:srcSel.value,
         outputFormat:fmtPdf.classList.contains('active')?'pdf':'docx',
         filenameTemplate:fnInp.value,selectedIndices
       });
@@ -4426,13 +4455,39 @@ async function _buildSerienLinkCardView(c,cont){
 
   // ── MAIL ────────────────────────────────────────────────────────────────────
   cont.appendChild(secHdr('Mail-Versand (optional)'));
-  const mailGrid=el('div','');mailGrid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start';cont.appendChild(mailGrid);
 
-  const mailSelSec=_dbSec(mailGrid,'Mail-Vorlage (Boardkarte)');
-  const mailSel=mkSel('<option value="">– keine –</option>'+mailCards.map(m=>`<option value="${m.id}">${m.title}</option>`).join(''),cs.activeMailCardId);
-  mailSelSec.appendChild(mailSel);
+  // Chip: gekoppelte Mail-Boardkarten (linkedEmailCardId === c.id)
+  const mailChipSec=_dbSec(cont,'Verknüpfte Mail-Vorlage');
+  const mailRefBtn=el('button','btn');mailRefBtn.textContent='↻';mailRefBtn.title='Neu laden';mailRefBtn.style.cssText='font-size:.68rem;padding:1px 5px;float:right';
+  mailChipSec.appendChild(mailRefBtn);
+  const mailChipWrap=el('div','');mailChipWrap.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;min-height:22px;align-items:center';
+  mailChipSec.appendChild(mailChipWrap);
 
-  const accSec2=_dbSec(mailGrid,'Absenderkonto');
+  function _renderMailChips(){
+    mailChipWrap.innerHTML='';
+    const linked=Object.values(S.cards).filter(bc=>{
+      if(DB_CARD_TYPES.includes(bc.cardType)||bc.cardType==='file_card')return false;
+      try{return bc.cardMode==='email'&&JSON.parse(bc.cardSettings||'{}').linkedEmailCardId===c.id;}catch{return false;}
+    }).sort((a,b)=>a.title.localeCompare(b.title,'de'));
+    if(!linked.length){
+      if(activeMailCardId){activeMailCardId='';_saveCs();}
+      const h=el('span','');h.style.cssText='font-size:.72rem;color:var(--muted)';h.textContent='Keine Mail-Karte verknüpft – in einer Mail-Karte diesen Hub koppeln';
+      mailChipWrap.appendChild(h);return;
+    }
+    if(!linked.find(bc=>bc.id===activeMailCardId)){activeMailCardId=linked[0].id;_saveCs();_refreshMailAtts(activeMailCardId);}
+    linked.forEach(bc=>{
+      const isAct=bc.id===activeMailCardId;
+      const chip=el('span','');
+      chip.style.cssText=`display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:10px;font-size:.73rem;border:1px solid ${isAct?'var(--acc)':'var(--border)'};background:${isAct?'var(--acc)':'var(--bg3)'};color:${isAct?'#fff':'var(--text)'};user-select:none`;
+      chip.innerHTML=(isAct?'✓ ':'')+`<span style="cursor:pointer">${bc.title}</span>`;
+      chip.querySelector('span').onclick=()=>{activeMailCardId=bc.id;_saveCs();_renderMailChips();_refreshMailAtts(bc.id);};
+      const nav=el('span','');nav.textContent='↗';nav.style.cssText='cursor:pointer;opacity:.7;font-size:.8rem';nav.onclick=e=>{e.stopPropagation();openModal(bc.id);};
+      chip.appendChild(nav);mailChipWrap.appendChild(chip);
+    });
+  }
+  mailRefBtn.onclick=_renderMailChips;
+
+  const accSec2=_dbSec(cont,'Absenderkonto');
   const accSel=mkSel('<option value="">– wählen –</option>'+accounts.map(a=>`<option value="${a.id}">${a.name} (${a.smtp_user})</option>`).join(''),cs.accountId);
   accSec2.appendChild(accSel);
   const pinRow=el('div','');pinRow.style.cssText='display:flex;gap:5px;margin-top:5px;align-items:center';
@@ -4466,13 +4521,13 @@ async function _buildSerienLinkCardView(c,cont){
   }
 
   // Sende-Buttons
-  const tplRef={get value(){return mailSel.value;}};
+  const tplRef={get value(){return activeMailCardId;}};
   const mailBtnRow=el('div','');mailBtnRow.style.cssText='display:flex;gap:6px;margin-top:10px;flex-wrap:wrap';
   const prevBtn=el('button','btn');prevBtn.textContent='👁 Vorschau';
   const testBtn=el('button','btn');testBtn.textContent='✉ Test-Email';
   testBtn.onclick=()=>_doSeriesSend(c,srcSel,tplRef,accSel,selAtts,rowsSec,accounts,true,ausgabeRef);
   const sendBtn=el('button','btn pri');sendBtn.textContent='✉ Senden';
-  sendBtn.onclick=()=>{if(!mailSel.value){toast('Keine Mail-Vorlage gewählt');return;}_doSeriesSend(c,srcSel,tplRef,accSel,selAtts,rowsSec,accounts,false,ausgabeRef);};
+  sendBtn.onclick=()=>{if(!activeMailCardId){toast('Keine Mail-Vorlage verknüpft');return;}_doSeriesSend(c,srcSel,tplRef,accSel,selAtts,rowsSec,accounts,false,ausgabeRef);};
   mailBtnRow.append(prevBtn,testBtn,sendBtn);cont.appendChild(mailBtnRow);
 
   // Vorschau-Panel
@@ -4554,10 +4609,11 @@ async function _buildSerienLinkCardView(c,cont){
   };
 
   // onChange-Handler
-  srcSel.onchange=_saveCs;dokSel.onchange=_saveCs;fnInp.oninput=_saveCs;accSel.onchange=_saveCs;
-  mailSel.onchange=async()=>{_saveCs();await _refreshMailAtts(mailSel.value);};
+  srcSel.onchange=_saveCs;fnInp.oninput=_saveCs;accSel.onchange=_saveCs;
 
   // Init
+  _renderDokChips();
+  _renderMailChips();
   await _refreshAusgabe(false);
   if(cs.activeMailCardId)await _refreshMailAtts(cs.activeMailCardId);
   if(cs.dataSrcId)await _loadSlRows(srcSel,rowsSec);
@@ -11824,7 +11880,7 @@ async function _initEmailSec(card){
   tlWrap.appendChild(tlLbl);
 
   const emailCards=Object.values(S.cards||{})
-    .filter(ec=>ec.cardType==='maillink_card')
+    .filter(ec=>ec.cardType==='maillink_card'||ec.cardType==='serienlink_card')
     .sort((a,b)=>a.title.localeCompare(b.title,'de'));
 
   const cs2=JSON.parse(card.cardSettings||'{}');
@@ -11849,7 +11905,7 @@ async function _initEmailSec(card){
       const chipRow=el('div','');chipRow.style.cssText='display:flex;align-items:center;gap:6px;flex-wrap:wrap';
       const chip=el('span','');
       chip.style.cssText='display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:10px;font-size:.78rem;background:var(--acc);color:#fff;border:1px solid var(--acc)';
-      chip.innerHTML='✉ <span>'+ec.title+'</span>';
+      chip.innerHTML=(ec.cardType==='serienlink_card'?'⊕ ':'✉ ')+'<span>'+ec.title+'</span>';
       const navBtn=el('button','btn');navBtn.textContent='↗ öffnen';navBtn.style.cssText='font-size:.68rem;padding:1px 7px';
       navBtn.onclick=()=>openModal(ec.id);
       const unlBtn=el('button','btn');unlBtn.textContent='× Trennen';unlBtn.style.cssText='font-size:.68rem;padding:1px 7px';
@@ -11868,7 +11924,7 @@ async function _initEmailSec(card){
       } else {
         const row=el('div','');row.style.cssText='display:flex;gap:6px;align-items:center';
         const ecSel=el('select','sl-inp');ecSel.style.cssText='flex:1;font-size:.75rem';
-        ecSel.innerHTML='<option value="">– Vorlage wählen –</option>'+emailCards.map(ec=>`<option value="${ec.id}">✉ ${ec.title}</option>`).join('');
+        ecSel.innerHTML='<option value="">– Vorlage wählen –</option>'+emailCards.map(ec=>`<option value="${ec.id}">${ec.cardType==='serienlink_card'?'⊕':'✉'} ${ec.title}</option>`).join('');
         const linkBtn=el('button','btn pri');linkBtn.textContent='Verknüpfen';linkBtn.style.cssText='font-size:.72rem;white-space:nowrap';
         linkBtn.onclick=async()=>{
           if(!ecSel.value){toast('Bitte eine Vorlage wählen');return;}
@@ -11989,7 +12045,7 @@ async function _initDocSec(card){
   const dlLbl=el('div','slbl');dlLbl.textContent='Dok-Karte koppeln';dlLbl.style.marginBottom='4px';
   dlWrap.appendChild(dlLbl);
   const docLinkCards=Object.values(S.cards||{})
-    .filter(dc=>dc.cardType==='doclink_card')
+    .filter(dc=>dc.cardType==='doclink_card'||dc.cardType==='serienlink_card')
     .sort((a,b)=>a.title.localeCompare(b.title,'de'));
   const csDl=JSON.parse(card.cardSettings||'{}');
   let linkedDcId=csDl.linkedDocCardId||'';
@@ -12011,7 +12067,7 @@ async function _initDocSec(card){
       const chipRow=el('div','');chipRow.style.cssText='display:flex;align-items:center;gap:6px;flex-wrap:wrap';
       const chip=el('span','');
       chip.style.cssText='display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:10px;font-size:.78rem;background:var(--acc);color:#fff;border:1px solid var(--acc)';
-      chip.innerHTML='▤ <span>'+dc.title+'</span>';
+      chip.innerHTML=(dc.cardType==='serienlink_card'?'⊕ ':'▤ ')+'<span>'+dc.title+'</span>';
       const navBtn=el('button','btn');navBtn.textContent='↗ öffnen';navBtn.style.cssText='font-size:.68rem;padding:1px 7px';
       navBtn.onclick=()=>openModal(dc.id);
       const unlBtn=el('button','btn');unlBtn.textContent='× Trennen';unlBtn.style.cssText='font-size:.68rem;padding:1px 7px';
@@ -12026,7 +12082,7 @@ async function _initDocSec(card){
         const row=el('div','');row.style.cssText='display:flex;gap:6px;align-items:center';
         const dcSel=el('select','sl-inp');dcSel.style.cssText='flex:1;font-size:.75rem';
         dcSel.innerHTML='<option value="">– Dok-Karte wählen –</option>'+
-          docLinkCards.map(dc=>`<option value="${dc.id}">▤ ${dc.title}</option>`).join('');
+          docLinkCards.map(dc=>`<option value="${dc.id}">${dc.cardType==='serienlink_card'?'⊕':'▤'} ${dc.title}</option>`).join('');
         const linkBtn=el('button','btn pri');linkBtn.textContent='Koppeln';linkBtn.style.cssText='font-size:.72rem;white-space:nowrap';
         linkBtn.onclick=async()=>{
           if(!dcSel.value){toast('Bitte eine Dok-Karte wählen');return;}
