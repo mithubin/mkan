@@ -3908,6 +3908,7 @@ async function _buildEmailCardView(c,cont){
 
   // Sende-Buttons
   const btnRow=el('div','');btnRow.style.cssText='display:flex;gap:6px;margin-top:10px;flex-wrap:wrap';
+  const prevBtn=el('button','btn');prevBtn.textContent='👁 Vorschau';
   const testBtn=el('button','btn');testBtn.textContent='✉ Test-Email';
   testBtn.onclick=()=>_doSeriesSend(c,srcSel,tplRef,accSel,selAtts,rowsSec,accounts,true,ausgabeRef);
   const sendBtn=el('button','btn pri');sendBtn.textContent='✉ Senden';
@@ -3916,7 +3917,124 @@ async function _buildEmailCardView(c,cont){
     if(S.cards[activeTplId]&&S.cards[activeTplId].cardMode!=='email'){toast('Aktive Vorlage nicht mehr im Mail-Modus – Versand blockiert');return;}
     _doSeriesSend(c,srcSel,tplRef,accSel,selAtts,rowsSec,accounts,false,ausgabeRef);
   };
-  btnRow.append(testBtn,sendBtn);cont.appendChild(btnRow);
+  btnRow.append(prevBtn,testBtn,sendBtn);cont.appendChild(btnRow);
+
+  // Vorschau-Panel
+  const prevPanel=el('div','');
+  prevPanel.style.cssText='display:none;margin-top:10px;border:1px solid var(--border);border-radius:6px;overflow:hidden';
+  cont.appendChild(prevPanel);
+
+  let _prevOpen=false,_prevIdx=0,_prevTplCard=null;
+
+  function _prevRows(){
+    if(!rowsSec._rows)return[];
+    const checked=[...rowsSec.querySelectorAll('tbody input[type=checkbox]:checked')].map(cb=>parseInt(cb.dataset.idx));
+    return checked.length?checked.map(i=>({row:rowsSec._rows[i],origIdx:i})):rowsSec._rows.map((r,i)=>({row:r,origIdx:i}));
+  }
+
+  async function _renderPreview(){
+    const rows=_prevRows();
+    if(!rows.length){prevPanel.innerHTML='<div style="padding:10px;font-size:.75rem;color:var(--muted)">Keine Daten geladen.</div>';return;}
+    if(_prevIdx>=rows.length)_prevIdx=0;
+    const {row,origIdx}=rows[_prevIdx];
+    const cols=rowsSec._cols||[];const melIdx=rowsSec._melIdx??-1;
+
+    // Template laden (lazy, gecacht)
+    const tid=tplRef.value;
+    if(!tid){prevPanel.innerHTML='<div style="padding:10px;font-size:.75rem;color:var(--dng)">Keine Vorlage gewählt.</div>';return;}
+    if(!_prevTplCard||_prevTplCard.id!==tid){
+      try{_prevTplCard=await api('GET','/cards/'+tid);}catch{prevPanel.innerHTML='<div style="padding:10px;font-size:.75rem;color:var(--dng)">Vorlage nicht ladbar.</div>';return;}
+    }
+    const tplCs=JSON.parse(_prevTplCard.cardSettings||'{}');
+    const subjectTpl=(tplCs.mailSubject||'').trim();
+    const bodyTpl=_prevTplCard.notes||'';
+
+    const data={datum:new Date().toLocaleDateString('de-DE')};
+    cols.forEach((col,i)=>{data[col]=row[i]??'';data[col.toLowerCase()]=row[i]??'';});
+    const to=melIdx>=0?row[melIdx]||'–':'–';
+    const subject=_fillTemplate(subjectTpl,data)||'(kein Betreff)';
+    const bodyHtml=marked.parse(_fillTemplate(bodyTpl,data),{breaks:true});
+
+    // Anhang aus Ausgabe-Karte
+    const dokFiles=ausgabeRef?.files||[];
+    const dokFile=dokFiles.find(f=>f.position===origIdx);
+    const fixedAtts=[...selAtts];
+
+    prevPanel.innerHTML='';
+
+    // Nav-Zeile
+    const navDiv=el('div','');navDiv.style.cssText='display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg3);border-bottom:1px solid var(--border)';
+    if(rows.length>1){
+      const pL=el('button','btn');pL.textContent='←';pL.style.cssText='padding:1px 8px;font-size:.8rem';pL.onclick=()=>{_prevIdx=(_prevIdx-1+rows.length)%rows.length;_renderPreview();};
+      const pR=el('button','btn');pR.textContent='→';pR.style.cssText='padding:1px 8px;font-size:.8rem';pR.onclick=()=>{_prevIdx=(_prevIdx+1)%rows.length;_renderPreview();};
+      const pInfo=el('span','');pInfo.style.cssText='font-size:.75rem;flex:1;text-align:center';
+      pInfo.textContent=`Zeile ${_prevIdx+1} / ${rows.length}${rows.length<(rowsSec._rows?.length||0)?' (Auswahl)':''}`;
+      navDiv.append(pL,pInfo,pR);
+    }
+    const pTest=el('button','btn');pTest.textContent='✉ Test senden';pTest.style.cssText='font-size:.72rem;white-space:nowrap';
+    pTest.onclick=()=>_doPreviewTest(origIdx);
+    navDiv.appendChild(pTest);
+    prevPanel.appendChild(navDiv);
+
+    // An
+    const toDiv=el('div','');toDiv.style.cssText='padding:8px 10px;border-bottom:1px solid var(--border)';
+    toDiv.innerHTML=`<div style="font-size:.72rem;color:var(--muted)">An</div><div style="font-size:.82rem">${to}</div>`;
+    prevPanel.appendChild(toDiv);
+
+    // Betreff
+    const subjDiv=el('div','');subjDiv.style.cssText='padding:8px 10px;border-bottom:1px solid var(--border)';
+    subjDiv.innerHTML=`<div style="font-size:.72rem;color:var(--muted)">Betreff</div><div style="font-size:.82rem;font-weight:500">${subject}</div>`;
+    prevPanel.appendChild(subjDiv);
+
+    // Body
+    const bodyDiv=el('div','md-body');bodyDiv.style.cssText='padding:8px 10px;font-size:.8rem;line-height:1.5;max-height:220px;overflow-y:auto';
+    bodyDiv.innerHTML=bodyHtml;
+    prevPanel.appendChild(bodyDiv);
+
+    // Anhang
+    if(dokFile){
+      const attDiv=el('div','');attDiv.style.cssText='padding:6px 10px;background:var(--bg3);border-top:1px solid var(--border);font-size:.75rem';
+      const nameSpan=el('span','');nameSpan.textContent=dokFile.name;nameSpan.style.cssText='cursor:pointer;text-decoration:underline;color:var(--acc)';
+      nameSpan.onclick=()=>dlAtt({url:'/attachments/'+dokFile.attId+'/file',name:dokFile.name});
+      attDiv.append(document.createTextNode('📎 '),nameSpan);
+      if(fixedAtts.length)attDiv.append(document.createTextNode(' + '+fixedAtts.length+' fester Anhang'));
+      prevPanel.appendChild(attDiv);
+    }else if(fixedAtts.length){
+      const attDiv=el('div','');attDiv.style.cssText='padding:6px 10px;background:var(--bg3);border-top:1px solid var(--border);font-size:.75rem';
+      attDiv.textContent='📎 '+fixedAtts.length+' Anhang/Anhänge (fest)';
+      prevPanel.appendChild(attDiv);
+    }
+  }
+
+  async function _doPreviewTest(origIdx){
+    if(!tplRef.value){toast('Keine Vorlage gewählt');return;}
+    const acc=accounts.find(a=>a.id===accSel.value);
+    if(!acc){toast('Kein Absenderkonto gewählt');return;}
+    const to=acc.from_address||acc.smtp_user||'';
+    if(!_prevTplCard){toast('Vorlage nicht geladen');return;}
+    const tplCs=JSON.parse(_prevTplCard.cardSettings||'{}');
+    const subjectTpl=(tplCs.mailSubject||'').trim();
+    if(!subjectTpl){toast('Kein Betreff in Vorlage');return;}
+    const row=rowsSec._rows[origIdx];const cols=rowsSec._cols||[];
+    const data={datum:new Date().toLocaleDateString('de-DE')};
+    cols.forEach((col,i)=>{data[col]=row[i]??'';data[col.toLowerCase()]=row[i]??'';});
+    const subject=_fillTemplate(subjectTpl,data);
+    const bodyText=_fillTemplate(_prevTplCard.notes||'',data);
+    const bodyHtml=marked.parse(bodyText,{breaks:true});
+    const dokFiles=ausgabeRef?.files||[];
+    const dokFile=dokFiles.find(f=>f.position===origIdx);
+    const attIds=dokFile?[dokFile.attId]:[...selAtts];
+    if(!confirm(`Test-Email an: ${to}\nBetreff: ${subject}`))return;
+    try{await api('POST','/mail/composer/send',{account_id:accSel.value,to,subject,body:bodyText,html_body:bodyHtml,attachment_ids:attIds});toast('Test-Email gesendet');}
+    catch(e){toast('Fehler: '+(e.message||'?'));}
+  }
+
+  prevBtn.onclick=async()=>{
+    _prevOpen=!_prevOpen;
+    prevPanel.style.display=_prevOpen?'':'none';
+    prevBtn.textContent=_prevOpen?'▲ Vorschau':'👁 Vorschau';
+    if(_prevOpen){_prevTplCard=null;await _renderPreview();}
+  };
 
   if(activeTplId)await _refreshAttChips(activeTplId);
   if(cs.dataSrcId)await _loadEmailCardRows(c,srcSel,rowsSec);
