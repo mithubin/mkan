@@ -4385,27 +4385,35 @@ async function _buildSerienLinkCardView(c,cont){
     c.cardSettings=ns;api('PATCH','/cards/'+c.id,{cardSettings:ns}).catch(()=>{});
   }
 
-  // Hilfe-Button
-  {const hb=el('button','md-help-btn');hb.textContent='?';hb.title='Serien-Hilfe';hb.style.cssText='float:right;margin-bottom:4px';hb.onclick=ev=>{ev.stopPropagation();toggleSerieHelp(hb,'dok');};cont.appendChild(hb);}
+  // Hilfe-Button (links)
+  {const hb=el('button','md-help-btn');hb.textContent='?';hb.title='Serien-Hilfe';hb.style.cssText='margin-left:15px;margin-bottom:4px';hb.onclick=ev=>{ev.stopPropagation();toggleSerieHelp(hb,'dok');};cont.appendChild(hb);}
 
-  // ── INPUT ───────────────────────────────────────────────────────────────────
+  // ── DATENQUELLE ─────────────────────────────────────────────────────────────
   cont.appendChild(secHdr('Datenquelle'));
   const srcWarn=el('div','');srcWarn.style.cssText='font-size:.8rem;font-weight:700;color:rgba(220,38,38,.85);background:rgba(239,68,68,.12);border-radius:4px;padding:4px 7px;margin-bottom:5px;line-height:1.4';
   srcWarn.textContent='⚠ Datenquelle nicht zwischen Dok-Erzeugung und Versand ändern – Zeilen-Zuordnung geht sonst verloren.';
   cont.appendChild(srcWarn);
+  const srcRow=el('div','');srcRow.style.cssText='display:flex;align-items:center;gap:8px';
   const srcSel=mkSel('<option value="">– wählen –</option>'+dbSrcs.map(d=>`<option value="${d.id}">${d.cardType==='table_card'?'⊟':'⊞'} ${d.title}</option>`).join(''),cs.dataSrcId);
-  cont.appendChild(srcSel);
-  const rowsSec=el('div','');rowsSec.id='slRows_'+c.id;
-  const loadBtn=el('button','btn');loadBtn.textContent='↻ Daten laden';loadBtn.style.cssText='font-size:.72rem;margin-top:5px';
+  srcSel.style.width='30%';
+  const loadBtn=el('button','btn');loadBtn.textContent='↻ Daten laden';loadBtn.style.cssText='font-size:.72rem;margin-left:15px;white-space:nowrap';
   loadBtn.onclick=()=>_loadSlRows(srcSel,rowsSec);
-  cont.appendChild(loadBtn);cont.appendChild(rowsSec);
+  srcRow.append(srcSel,loadBtn);cont.appendChild(srcRow);
+  const rowsSec=el('div','');rowsSec.id='slRows_'+c.id;rowsSec.style.marginTop='6px';
+  cont.appendChild(rowsSec);
 
-  // ── DOK ─────────────────────────────────────────────────────────────────────
-  cont.appendChild(secHdr('Dok-Generierung (optional)'));
+  // ── ZWEI-SPALTEN: DOK (links) + MAIL (rechts) ────────────────────────────────
+  const twoCol=el('div','');twoCol.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;margin-top:6px';
+  cont.appendChild(twoCol);
+  const dokCol=el('div','');twoCol.appendChild(dokCol);
+  const mailCol=el('div','');twoCol.appendChild(mailCol);
+  function colHdr(txt){const d=el('div','');d.style.cssText='font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0 0 5px;padding-top:6px;border-top:1px solid var(--border)';d.textContent=txt;return d;}
 
-  // Chip: gekoppelte Dok-Boardkarten (linkedDocCardId === c.id)
-  const dokChipSec=_dbSec(cont,'Verknüpfte Dok-Vorlage');
-  const dokRefBtn=el('button','btn');dokRefBtn.textContent='↻';dokRefBtn.title='Neu laden';dokRefBtn.style.cssText='font-size:.68rem;padding:1px 5px;float:right';
+  // ── DOK (links) ──────────────────────────────────────────────────────────────
+  dokCol.appendChild(colHdr('Dok-Generierung'));
+
+  const dokChipSec=_dbSec(dokCol,'Verknüpfte Dok-Vorlage');
+  const dokRefBtn=el('button','btn');dokRefBtn.textContent='↻';dokRefBtn.title='Neu laden';dokRefBtn.style.cssText='font-size:.68rem;padding:1px 5px;margin-left:15px';
   dokChipSec.appendChild(dokRefBtn);
   const dokChipWrap=el('div','');dokChipWrap.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;min-height:22px;align-items:center';
   dokChipSec.appendChild(dokChipWrap);
@@ -4434,8 +4442,7 @@ async function _buildSerienLinkCardView(c,cont){
   }
   dokRefBtn.onclick=_renderDokChips;
 
-  const dokGrid=el('div','');dokGrid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start;margin-top:6px';cont.appendChild(dokGrid);
-  const fmtSec=_dbSec(dokGrid,'Format');
+  const fmtSec=_dbSec(dokCol,'Format');
   const fmtRow=el('div','');fmtRow.style.cssText='display:flex;gap:4px;margin-top:3px';
   const fmtDocx=el('button','mode-btn'+(cs.outputFormat!=='pdf'?' active':''));fmtDocx.textContent='DOCX';
   const fmtPdf=el('button','mode-btn'+(cs.outputFormat==='pdf'?' active':''));fmtPdf.textContent='PDF';
@@ -4443,17 +4450,16 @@ async function _buildSerienLinkCardView(c,cont){
   fmtDocx.onclick=()=>{fmtDocx.classList.add('active');fmtPdf.classList.remove('active');_saveCs();};
   fmtPdf.onclick=()=>{fmtPdf.classList.add('active');fmtDocx.classList.remove('active');_saveCs();};
 
-  const fnSec=_dbSec(cont,'Dateiname (ohne Erweiterung)');
+  const fnSec=_dbSec(dokCol,'Dateiname (ohne Erweiterung)');
   const fnInp=mkTxtInp('{{dateiname}}',cs.filenameTemplate);
   fnSec.appendChild(fnInp);
 
   const dokBtnRow=el('div','');dokBtnRow.style.cssText='display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap';
-  const genBtn=el('button','btn pri');genBtn.textContent='▶ Seriendokumente erstellen';
+  const genBtn=el('button','btn pri');genBtn.style.width='100%';genBtn.textContent='▶ Seriendokumente erstellen';
   const dokInfo=el('span','');dokInfo.style.cssText='font-size:.72rem;color:var(--muted)';
-  dokBtnRow.append(genBtn,dokInfo);cont.appendChild(dokBtnRow);
+  dokBtnRow.append(genBtn,dokInfo);dokCol.appendChild(dokBtnRow);
 
-  // Ausgabe-Karte Dropdown
-  const ausgabeSec=_dbSec(cont,'Ausgabe-Karte (für Mail-Anhang)');
+  const ausgabeSec=_dbSec(dokCol,'Ausgabe-Karte (für Mail-Anhang)');
   const ausgabeSel=el('select','sl-inp');ausgabeSel.style.cssText='width:100%;font-size:.75rem;margin-top:3px';
   ausgabeSel.innerHTML='<option value="">– keine –</option>';
   ausgabeSec.appendChild(ausgabeSel);
@@ -4494,12 +4500,11 @@ async function _buildSerienLinkCardView(c,cont){
     genBtn.disabled=false;genBtn.textContent=orig;
   };
 
-  // ── MAIL ────────────────────────────────────────────────────────────────────
-  cont.appendChild(secHdr('Mail-Versand (optional)'));
+  // ── MAIL (rechts) ────────────────────────────────────────────────────────────
+  mailCol.appendChild(colHdr('Mail-Versand'));
 
-  // Chip: gekoppelte Mail-Boardkarten (linkedEmailCardId === c.id)
-  const mailChipSec=_dbSec(cont,'Verknüpfte Mail-Vorlage');
-  const mailRefBtn=el('button','btn');mailRefBtn.textContent='↻';mailRefBtn.title='Neu laden';mailRefBtn.style.cssText='font-size:.68rem;padding:1px 5px;float:right';
+  const mailChipSec=_dbSec(mailCol,'Verknüpfte Mail-Vorlage');
+  const mailRefBtn=el('button','btn');mailRefBtn.textContent='↻';mailRefBtn.title='Neu laden';mailRefBtn.style.cssText='font-size:.68rem;padding:1px 5px;margin-left:15px';
   mailChipSec.appendChild(mailRefBtn);
   const mailChipWrap=el('div','');mailChipWrap.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;min-height:22px;align-items:center';
   mailChipSec.appendChild(mailChipWrap);
@@ -4528,7 +4533,7 @@ async function _buildSerienLinkCardView(c,cont){
   }
   mailRefBtn.onclick=_renderMailChips;
 
-  const accSec2=_dbSec(cont,'Absenderkonto');
+  const accSec2=_dbSec(mailCol,'Absenderkonto');
   const accSel=mkSel('<option value="">– wählen –</option>'+accounts.map(a=>`<option value="${a.id}">${a.name} (${a.smtp_user})</option>`).join(''),cs.accountId);
   accSec2.appendChild(accSel);
   const pinRow=el('div','');pinRow.style.cssText='display:flex;gap:5px;margin-top:5px;align-items:center';
@@ -4541,10 +4546,9 @@ async function _buildSerienLinkCardView(c,cont){
   };
   pinRow.append(pinInp,unlockBtn);accSec2.appendChild(pinRow);
 
-  // Statische Anhänge aus Mail-Vorlage
-  const attSec=_dbSec(cont,'Statische Anhänge (aus Mail-Vorlage)');
+  const attSec=_dbSec(mailCol,'Statische Anhänge (aus Mail-Vorlage)');
   const selAtts=new Set();
-  const selAttsMap={}; // id→name für Vorschau
+  const selAttsMap={};
   async function _refreshMailAtts(mailCardId){
     attSec.querySelectorAll('.ec-att-wrap').forEach(x=>x.remove());selAtts.clear();Object.keys(selAttsMap).forEach(k=>delete selAttsMap[k]);
     if(!mailCardId)return;
@@ -4562,17 +4566,18 @@ async function _buildSerienLinkCardView(c,cont){
     attSec.appendChild(wrap);
   }
 
-  // Sende-Buttons
+  // Sende-Buttons (rechte Spalte)
   const tplRef={get value(){return activeMailCardId;}};
   const mailBtnRow=el('div','');mailBtnRow.style.cssText='display:flex;gap:6px;margin-top:10px;flex-wrap:wrap';
-  const prevBtn=el('button','btn');prevBtn.textContent='👁 Vorschau';
   const testBtn=el('button','btn');testBtn.textContent='✉ Test-Email';
   testBtn.onclick=()=>_doSeriesSend(c,srcSel,tplRef,accSel,selAtts,rowsSec,accounts,true,ausgabeRef);
   const sendBtn=el('button','btn pri');sendBtn.textContent='✉ Senden';
   sendBtn.onclick=()=>{if(!activeMailCardId){toast('Keine Mail-Vorlage verknüpft');return;}_doSeriesSend(c,srcSel,tplRef,accSel,selAtts,rowsSec,accounts,false,ausgabeRef);};
-  mailBtnRow.append(prevBtn,testBtn,sendBtn);cont.appendChild(mailBtnRow);
+  mailBtnRow.append(testBtn,sendBtn);mailCol.appendChild(mailBtnRow);
 
-  // Vorschau-Panel
+  // ── VORSCHAU (volle Breite) ──────────────────────────────────────────────────
+  const prevBtn=el('button','btn');prevBtn.textContent='👁 Vorschau';prevBtn.style.marginTop='10px';
+  cont.appendChild(prevBtn);
   const prevPanel=el('div','');prevPanel.style.cssText='display:none;margin-top:10px;border:1px solid var(--border);border-radius:6px;overflow:hidden';
   cont.appendChild(prevPanel);
   let _slPrevOpen=false,_slPrevIdx=0,_slPrevTplCard=null;
