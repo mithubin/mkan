@@ -4015,10 +4015,9 @@ async function _buildEmailCardView(c,cont){
     const acc=accounts.find(a=>a.id===accSel.value);
     if(!acc){toast('Kein Absenderkonto gewählt');return;}
     if(!_prevTplCard){toast('Vorlage nicht geladen');return;}
-    const melIdx=rowsSec._melIdx??-1;
     const row=rowsSec._rows[origIdx];
-    const to=melIdx>=0&&row?row[melIdx]||'':'';
-    if(!to){toast('Kein Empfänger in dieser Zeile');return;}
+    const to=acc.from_address||acc.smtp_user||'';
+    if(!to){toast('Kein Absenderkonto konfiguriert');return;}
     const cols=rowsSec._cols||[];
     const data={datum:new Date().toLocaleDateString('de-DE')};
     cols.forEach((col,i)=>{data[col]=row[i]??'';data[col.toLowerCase()]=row[i]??'';});
@@ -4031,7 +4030,7 @@ async function _buildEmailCardView(c,cont){
     const dokFiles=ausgabeRef?.files||[];
     const dokFile=dokFiles.find(f=>f.position===origIdx);
     const attIds=[...(dokFile?[dokFile.attId]:[]),...selAtts];
-    try{await api('POST','/mail/composer/send',{account_id:accSel.value,to,subject,body:bodyText,html_body:bodyHtml,attachment_ids:attIds});toast('✉ Test an '+to);}
+    try{await api('POST','/mail/composer/send',{account_id:accSel.value,to,subject,body:bodyText,html_body:bodyHtml,attachment_ids:attIds});toast('✉ Test an '+to+' (Zeile '+origIdx+')');}
     catch(e){toast('Fehler: '+(e.message||'?'));}
   }
 
@@ -4137,7 +4136,7 @@ async function _doSeriesSend(c,srcSel,tplSel,accSel,selAtts,rowsSec,accounts,isT
   for(const {row,origIdx} of targetRows){
     const data={datum:new Date().toLocaleDateString('de-DE')};
     cols.forEach((col,i)=>{data[col]=row[i]??'';data[col.toLowerCase()]=row[i]??'';});
-    const to=row[melIdx]||'';
+    const to=isTest?(acc?.from_address||acc?.smtp_user||''):(row[melIdx]||'');
     if(!to){errors.push('Kein Empfänger');continue;}
     const subject=_fillTemplate(_subjectTpl,data);
     const bodyText=_fillTemplate(_bodyTpl,data);
@@ -4579,12 +4578,13 @@ async function _buildSerienLinkCardView(c,cont){
     pTest.onclick=async()=>{
       const acc=accounts.find(a=>a.id===accSel.value);if(!acc){toast('Kein Konto gewählt');return;}
       if(!_slPrevTplCard){toast('Vorlage nicht geladen');return;}
-      if(to==='–'||!to){toast('Kein Empfänger in dieser Zeile');return;}
+      const testTo=acc.from_address||acc.smtp_user||'';
+      if(!testTo){toast('Kein Absenderkonto konfiguriert');return;}
       const subj=_fillTemplate((JSON.parse(_slPrevTplCard.cardSettings||'{}').mailSubject||'').trim(),data);
       if(!subj){toast('Kein Betreff in Vorlage');return;}
       const bodyText=_fillTemplate(_slPrevTplCard.notes||'',data);
       const attIds=[...(dokFile?[dokFile.attId]:[]),...selAtts];
-      try{await api('POST','/mail/composer/send',{account_id:accSel.value,to,subject:subj,body:bodyText,html_body:marked.parse(bodyText,{breaks:true}),attachment_ids:attIds});toast('✉ Test an '+to);}
+      try{await api('POST','/mail/composer/send',{account_id:accSel.value,to:testTo,subject:subj,body:bodyText,html_body:marked.parse(bodyText,{breaks:true}),attachment_ids:attIds});toast('✉ Test an '+testTo);}
       catch(e){toast('Fehler: '+(e.message||'?'));}
     };
     navDiv.appendChild(pTest);prevPanel.appendChild(navDiv);
