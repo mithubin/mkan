@@ -61,6 +61,7 @@
     .db-card-badge.badge-template { background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.4); color:#fcd34d; }
     .db-card-badge.badge-email { background:rgba(14,165,233,.12); border:1px solid rgba(14,165,233,.4); color:#38bdf8; }
     .db-card-badge.badge-doc { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.4); color:#f87171; }
+    .db-card-badge.badge-serie { background:rgba(168,85,247,.12); border:1px solid rgba(168,85,247,.4); color:#c084fc; }
     .db-section { margin-bottom:6px; }
     .db-section-hdr { font-size:.58rem; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); padding:4px 2px 3px; opacity:.7; }
     .db-type-pick { display:flex; flex-direction:column; gap:5px; padding:8px 0; }
@@ -3643,7 +3644,7 @@ function mkDbCell(lane, col){
 
 function mkDbCard(c){
   const e=el('div','db-card');e.dataset.cid=c.id;e.draggable=true;
-  const typeMap={table_card:['Tabelle','badge-table'],query_card:['Abfrage','badge-query'],template_card:['MD-Tpl','badge-template'],maillink_card:['Mail-Tpl','badge-email'],doclink_card:['Dok-Tpl','badge-doc']};
+  const typeMap={table_card:['Tabelle','badge-table'],query_card:['Abfrage','badge-query'],template_card:['MD-Tpl','badge-template'],maillink_card:['Mail-Tpl','badge-email'],doclink_card:['Dok-Tpl','badge-doc'],serienlink_card:['Serien-Hub','badge-serie']};
   const [lbl,cls]=typeMap[c.cardType]||['DB','badge-query'];
   const handle=el('span','db-drag-handle');handle.textContent='⠿';handle.title='Reihenfolge ändern';
   const title=el('div','db-card-title');title.textContent=c.title;
@@ -3658,13 +3659,13 @@ function mkDbCard(c){
 
 function openDbCardPicker(colId,laneId){
   const wrap=el('div','db-type-pick');
-  const types=[['table_card','⊟ Tabellen-Karte','CSV-Daten importieren, Tabelle verwalten'],['query_card','⊞ Abfrage-Karte','SQL-Query speichern und testen'],['maillink_card','✉ E-Mail-Template','Serienmail senden (Datenquelle mit mêl-Spalte)'],['doclink_card','▤ Dok-Template','Seriendokumente aus verlinkten Vorlagen'],['template_card','⊡ MD-Template','Ausgabe-Template mit {{Feldname}}']];
+  const types=[['serienlink_card','⊕ Serien-Hub','Seriendokumente + Serienmail in einem (empfohlen)'],['table_card','⊟ Tabellen-Karte','CSV-Daten importieren, Tabelle verwalten'],['query_card','⊞ Abfrage-Karte','SQL-Query speichern und testen'],['maillink_card','✉ E-Mail-Template','Serienmail senden (Datenquelle mit mêl-Spalte)'],['doclink_card','▤ Dok-Template','Seriendokumente aus verlinkten Vorlagen'],['template_card','⊡ MD-Template','Ausgabe-Template mit {{Feldname}}']];
   types.forEach(([type,name,desc])=>{
     const btn=document.createElement('button');
     btn.innerHTML=`<strong>${name}</strong><br><span style="font-size:.7rem;color:var(--muted)">${desc}</span>`;
     btn.onclick=async()=>{
       document.body.removeChild(pop);
-      const defaults={table_card:'Meine Tabelle',query_card:'Meine Abfrage',template_card:'Meine MD-Vorlage',maillink_card:'Meine Mail-Vorlage',doclink_card:'Meine Dok-Vorlage'};
+      const defaults={table_card:'Meine Tabelle',query_card:'Meine Abfrage',template_card:'Meine MD-Vorlage',maillink_card:'Meine Mail-Vorlage',doclink_card:'Meine Dok-Vorlage',serienlink_card:'Mein Serien-Hub'};
       const t=prompt('Kartentitel:',defaults[type]||'Neue Karte');
       if(!t||!t.trim())return;
       const r=await api('POST','/cards',{board_id:S.id,col_id:colId,lane_id:laneId,title:t.trim(),cardType:type});
@@ -3688,7 +3689,7 @@ function openDbCardPicker(colId,laneId){
 
 // ── DB card modal ─────────────────────────────────────────────────────────
 
-const DB_CARD_TYPES=['table_card','query_card','template_card','maillink_card','doclink_card'];
+const DB_CARD_TYPES=['table_card','query_card','template_card','maillink_card','doclink_card','serienlink_card'];
 
 function buildDbCardView(c){
   const cont=$('dbCardContent');cont.innerHTML='';
@@ -3697,6 +3698,7 @@ function buildDbCardView(c){
   else if(c.cardType==='template_card') _buildTemplateCardView(c,cont);
   else if(c.cardType==='maillink_card') _buildEmailCardView(c,cont);
   else if(c.cardType==='doclink_card') _buildDocLinkCardView(c,cont);
+  else if(c.cardType==='serienlink_card') _buildSerienLinkCardView(c,cont);
 }
 
 async function _buildEmailCardView(c,cont){
@@ -4319,6 +4321,290 @@ async function _doDocLinkSeries(c,srcSel,rowsSec,genBtn){
     toast('Fehler: '+(e?.detail||e?.message||e));
   }
   genBtn.disabled=false;genBtn.textContent=orig;
+}
+
+// ── serienlink_card: kombinierter Serien-Hub (Dok + Mail) ─────────────────────
+
+async function _buildSerienLinkCardView(c,cont){
+  await ensureMarked();
+  const cs=JSON.parse(c.cardSettings||'{}');
+  let accounts=[];
+  try{accounts=await api('GET','/mail/composer/accounts');}catch{}
+
+  const dbSrcs=Object.values(S.cards).filter(x=>x.cardType==='table_card'||x.cardType==='query_card');
+  const dokCards=Object.values(S.cards).filter(x=>x.cardMode==='doc'&&x.cardType==='card');
+  const mailCards=Object.values(S.cards).filter(x=>x.cardMode==='email'&&x.cardType==='card');
+
+  function mkSel(opts,val){const s=el('select','sl-inp');s.style.cssText='width:100%;font-size:.75rem;margin-top:3px';s.innerHTML=opts;s.value=val||'';return s;}
+  function mkTxtInp(ph,val){const i=el('input','');i.type='text';i.placeholder=ph;i.value=val||'';i.style.cssText='width:100%;font-size:.75rem;margin-top:3px;padding:3px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);box-sizing:border-box';return i;}
+  function secHdr(txt){const d=el('div','');d.style.cssText='font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:12px 0 5px;padding-top:8px;border-top:1px solid var(--border)';d.textContent=txt;return d;}
+
+  function _saveCs(){
+    const ns=JSON.stringify({dataSrcId:srcSel.value,activeDokCardId:dokSel.value,activeMailCardId:mailSel.value,outputFormat:fmtPdf.classList.contains('active')?'pdf':'docx',filenameTemplate:fnInp.value,accountId:accSel.value});
+    c.cardSettings=ns;api('PATCH','/cards/'+c.id,{cardSettings:ns}).catch(()=>{});
+  }
+
+  // Hilfe-Button
+  {const hb=el('button','md-help-btn');hb.textContent='?';hb.title='Serien-Hilfe';hb.style.cssText='float:right;margin-bottom:4px';hb.onclick=ev=>{ev.stopPropagation();toggleSerieHelp(hb,'dok');};cont.appendChild(hb);}
+
+  // ── INPUT ───────────────────────────────────────────────────────────────────
+  cont.appendChild(secHdr('Datenquelle'));
+  const srcSel=mkSel('<option value="">– wählen –</option>'+dbSrcs.map(d=>`<option value="${d.id}">${d.cardType==='table_card'?'⊟':'⊞'} ${d.title}</option>`).join(''),cs.dataSrcId);
+  cont.appendChild(srcSel);
+  const rowsSec=el('div','');rowsSec.id='slRows_'+c.id;
+  const loadBtn=el('button','btn');loadBtn.textContent='↻ Daten laden';loadBtn.style.cssText='font-size:.72rem;margin-top:5px';
+  loadBtn.onclick=()=>_loadSlRows(srcSel,rowsSec);
+  cont.appendChild(loadBtn);cont.appendChild(rowsSec);
+
+  // ── DOK ─────────────────────────────────────────────────────────────────────
+  cont.appendChild(secHdr('Dok-Generierung (optional)'));
+  const dokGrid=el('div','');dokGrid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start';cont.appendChild(dokGrid);
+
+  const dokSelSec=_dbSec(dokGrid,'Dok-Vorlage (Boardkarte)');
+  const dokSel=mkSel('<option value="">– keine –</option>'+dokCards.map(d=>`<option value="${d.id}">${d.title}</option>`).join(''),cs.activeDokCardId);
+  dokSelSec.appendChild(dokSel);
+
+  const fmtSec=_dbSec(dokGrid,'Format');
+  const fmtRow=el('div','');fmtRow.style.cssText='display:flex;gap:4px;margin-top:3px';
+  const fmtDocx=el('button','mode-btn'+(cs.outputFormat!=='pdf'?' active':''));fmtDocx.textContent='DOCX';
+  const fmtPdf=el('button','mode-btn'+(cs.outputFormat==='pdf'?' active':''));fmtPdf.textContent='PDF';
+  fmtRow.append(fmtDocx,fmtPdf);fmtSec.appendChild(fmtRow);
+  fmtDocx.onclick=()=>{fmtDocx.classList.add('active');fmtPdf.classList.remove('active');_saveCs();};
+  fmtPdf.onclick=()=>{fmtPdf.classList.add('active');fmtDocx.classList.remove('active');_saveCs();};
+
+  const fnSec=_dbSec(cont,'Dateiname-Template');
+  const fnInp=mkTxtInp('z.B. anmeldung_{{name}}.docx',cs.filenameTemplate);
+  fnSec.appendChild(fnInp);
+
+  const dokBtnRow=el('div','');dokBtnRow.style.cssText='display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap';
+  const genBtn=el('button','btn pri');genBtn.textContent='▶ Seriendokumente erstellen';
+  const dokInfo=el('span','');dokInfo.style.cssText='font-size:.72rem;color:var(--muted)';
+  dokBtnRow.append(genBtn,dokInfo);cont.appendChild(dokBtnRow);
+
+  // Ausgabe-Karte Dropdown
+  const ausgabeSec=_dbSec(cont,'Ausgabe-Karte (für Mail-Anhang)');
+  const ausgabeSel=el('select','sl-inp');ausgabeSel.style.cssText='width:100%;font-size:.75rem;margin-top:3px';
+  ausgabeSel.innerHTML='<option value="">– keine –</option>';
+  ausgabeSec.appendChild(ausgabeSel);
+
+  const ausgabeRef={value:'',files:[]};
+  ausgabeSel.onchange=()=>{
+    const opt=ausgabeSel.selectedOptions[0];
+    ausgabeRef.value=ausgabeSel.value||'';
+    try{ausgabeRef.files=opt&&ausgabeRef.value?JSON.parse(opt.dataset.files||'[]'):[];}catch{ausgabeRef.files=[];}
+  };
+
+  async function _refreshAusgabe(selectNewest){
+    try{
+      const list=await api('GET','/cards/'+c.id+'/ausgabe-cards');
+      ausgabeSel.innerHTML='<option value="">– keine –</option>'+
+        list.map(a=>`<option value="${a.id}" data-files='${JSON.stringify(a.files||[])}'>${a.title} (${a.fileCount} Dateien)</option>`).join('');
+      if(selectNewest&&list.length){ausgabeSel.value=list[0].id;ausgabeSel.dispatchEvent(new Event('change'));}
+    }catch{}
+  }
+
+  genBtn.onclick=async()=>{
+    if(!dokSel.value){toast('Keine Dok-Vorlage gewählt');return;}
+    if(!srcSel.value){toast('Keine Datenquelle gewählt');return;}
+    const selectedIndices=_getCheckedIndices(rowsSec);
+    if(selectedIndices!==null&&!selectedIndices.length){toast('Keine Zeilen ausgewählt');return;}
+    const orig=genBtn.textContent;genBtn.disabled=true;genBtn.textContent='⏳ Generiere…';
+    try{
+      const r=await api('POST','/cards/'+c.id+'/serienlink-docs',{
+        dokBoardCardId:dokSel.value,dataSrcId:srcSel.value,
+        outputFormat:fmtPdf.classList.contains('active')?'pdf':'docx',
+        filenameTemplate:fnInp.value,selectedIndices
+      });
+      dokInfo.textContent=r.count+' Dok(e) erstellt';
+      await loadBoard(S.id);
+      await _refreshAusgabe(true);
+      toast(r.count+' Dokument(e) → '+r.cardTitle);
+    }catch(e){toast('Fehler: '+(e?.detail||e?.message||e));}
+    genBtn.disabled=false;genBtn.textContent=orig;
+  };
+
+  // ── MAIL ────────────────────────────────────────────────────────────────────
+  cont.appendChild(secHdr('Mail-Versand (optional)'));
+  const mailGrid=el('div','');mailGrid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start';cont.appendChild(mailGrid);
+
+  const mailSelSec=_dbSec(mailGrid,'Mail-Vorlage (Boardkarte)');
+  const mailSel=mkSel('<option value="">– keine –</option>'+mailCards.map(m=>`<option value="${m.id}">${m.title}</option>`).join(''),cs.activeMailCardId);
+  mailSelSec.appendChild(mailSel);
+
+  const accSec2=_dbSec(mailGrid,'Absenderkonto');
+  const accSel=mkSel('<option value="">– wählen –</option>'+accounts.map(a=>`<option value="${a.id}">${a.name} (${a.smtp_user})</option>`).join(''),cs.accountId);
+  accSec2.appendChild(accSel);
+  const pinRow=el('div','');pinRow.style.cssText='display:flex;gap:5px;margin-top:5px;align-items:center';
+  const pinInp=el('input','');pinInp.type='password';pinInp.placeholder='PIN';pinInp.style.cssText='flex:1;font-size:.75rem;padding:3px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text)';
+  const unlockBtn=el('button','btn');unlockBtn.textContent='Entsperren';unlockBtn.style.cssText='font-size:.72rem;white-space:nowrap';
+  unlockBtn.onclick=async()=>{
+    const aid=accSel.value;if(!aid||!pinInp.value){toast('Konto und PIN erforderlich');return;}
+    try{await api('POST','/mail/composer/unlock',{account_id:aid,pin:pinInp.value});pinRow.style.display='none';toast('Konto entsperrt');}
+    catch{toast('PIN falsch oder Fehler');}
+  };
+  pinRow.append(pinInp,unlockBtn);accSec2.appendChild(pinRow);
+
+  // Statische Anhänge aus Mail-Vorlage
+  const attSec=_dbSec(cont,'Statische Anhänge (aus Mail-Vorlage)');
+  const selAtts=new Set();
+  async function _refreshMailAtts(mailCardId){
+    attSec.querySelectorAll('.ec-att-wrap').forEach(x=>x.remove());selAtts.clear();
+    if(!mailCardId)return;
+    let mc;try{mc=await api('GET','/cards/'+mailCardId);}catch{return;}
+    const atts=[...(mc.attachments||[]),...Object.values(S.cards).filter(x=>x.parentCardId===mailCardId&&x.cardType==='file_card'&&x.attachments?.length).map(fc=>({...fc.attachments[0],name:fc.attachments[0].name||fc.title}))].filter(a=>a.id);
+    if(!atts.length)return;
+    const wrap=el('div','ec-att-wrap');wrap.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin-top:4px';
+    atts.forEach(a=>{
+      const ext=(a.name||'').split('.').pop().toLowerCase();
+      const chip=el('span','');chip.style.cssText='display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:.72rem;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--muted);user-select:none';
+      chip.title=a.name;chip.innerHTML=`<span>${ext}</span><span style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>`;
+      chip.onclick=()=>{if(selAtts.has(a.id)){selAtts.delete(a.id);chip.style.background='var(--bg2)';chip.style.color='var(--muted)';chip.style.borderColor='var(--border)';}else{selAtts.add(a.id);chip.style.background='var(--acc)';chip.style.color='#fff';chip.style.borderColor='var(--acc)';}};
+      wrap.appendChild(chip);
+    });
+    attSec.appendChild(wrap);
+  }
+
+  // Sende-Buttons
+  const tplRef={get value(){return mailSel.value;}};
+  const mailBtnRow=el('div','');mailBtnRow.style.cssText='display:flex;gap:6px;margin-top:10px;flex-wrap:wrap';
+  const prevBtn=el('button','btn');prevBtn.textContent='👁 Vorschau';
+  const testBtn=el('button','btn');testBtn.textContent='✉ Test-Email';
+  testBtn.onclick=()=>_doSeriesSend(c,srcSel,tplRef,accSel,selAtts,rowsSec,accounts,true,ausgabeRef);
+  const sendBtn=el('button','btn pri');sendBtn.textContent='✉ Senden';
+  sendBtn.onclick=()=>{if(!mailSel.value){toast('Keine Mail-Vorlage gewählt');return;}_doSeriesSend(c,srcSel,tplRef,accSel,selAtts,rowsSec,accounts,false,ausgabeRef);};
+  mailBtnRow.append(prevBtn,testBtn,sendBtn);cont.appendChild(mailBtnRow);
+
+  // Vorschau-Panel
+  const prevPanel=el('div','');prevPanel.style.cssText='display:none;margin-top:10px;border:1px solid var(--border);border-radius:6px;overflow:hidden';
+  cont.appendChild(prevPanel);
+  let _slPrevOpen=false,_slPrevIdx=0,_slPrevTplCard=null;
+
+  function _slPrevRows(){
+    if(!rowsSec._rows)return[];
+    const checked=[...rowsSec.querySelectorAll('tbody input[type=checkbox]:checked')].map(cb=>parseInt(cb.dataset.idx));
+    return checked.length?checked.map(i=>({row:rowsSec._rows[i],origIdx:i})):rowsSec._rows.map((r,i)=>({row:r,origIdx:i}));
+  }
+  async function _slRenderPreview(){
+    const rows=_slPrevRows();
+    if(!rows.length){prevPanel.innerHTML='<div style="padding:10px;font-size:.75rem;color:var(--muted)">Keine Daten geladen.</div>';return;}
+    if(_slPrevIdx>=rows.length)_slPrevIdx=0;
+    const {row,origIdx}=rows[_slPrevIdx];
+    const cols=rowsSec._cols||[];const melIdx=rowsSec._melIdx??-1;
+    const tid=tplRef.value;
+    if(!tid){prevPanel.innerHTML='<div style="padding:10px;font-size:.75rem;color:var(--dng)">Keine Mail-Vorlage gewählt.</div>';return;}
+    if(!_slPrevTplCard||_slPrevTplCard.id!==tid){
+      try{_slPrevTplCard=await api('GET','/cards/'+tid);}catch{prevPanel.innerHTML='<div style="padding:10px;font-size:.75rem;color:var(--dng)">Vorlage nicht ladbar.</div>';return;}
+    }
+    const tplCs=JSON.parse(_slPrevTplCard.cardSettings||'{}');
+    const subjectTpl=(tplCs.mailSubject||'').trim();
+    const data={datum:new Date().toLocaleDateString('de-DE')};
+    cols.forEach((col,i)=>{data[col]=row[i]??'';data[col.toLowerCase()]=row[i]??'';});
+    const to=melIdx>=0?row[melIdx]||'–':'–';
+    const subject=_fillTemplate(subjectTpl,data)||'(kein Betreff)';
+    const bodyHtml=marked.parse(_fillTemplate(_slPrevTplCard.notes||'',data),{breaks:true});
+    const dokFiles=ausgabeRef?.files||[];
+    const dokFile=dokFiles.find(f=>f.position===origIdx);
+    prevPanel.innerHTML='';
+    const navDiv=el('div','');navDiv.style.cssText='display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg3);border-bottom:1px solid var(--border)';
+    if(rows.length>1){
+      const pL=el('button','btn');pL.textContent='←';pL.style.cssText='padding:1px 8px;font-size:.8rem';pL.onclick=()=>{_slPrevIdx=(_slPrevIdx-1+rows.length)%rows.length;_slRenderPreview();};
+      const pR=el('button','btn');pR.textContent='→';pR.style.cssText='padding:1px 8px;font-size:.8rem';pR.onclick=()=>{_slPrevIdx=(_slPrevIdx+1)%rows.length;_slRenderPreview();};
+      const pInfo=el('span','');pInfo.style.cssText='font-size:.75rem;flex:1;text-align:center';
+      pInfo.textContent=`Zeile ${_slPrevIdx+1} / ${rows.length}${rows.length<(rowsSec._rows?.length||0)?' (Auswahl)':''}`;
+      navDiv.append(pL,pInfo,pR);
+    }
+    const pTest=el('button','btn');pTest.textContent='✉ Test senden';pTest.style.cssText='font-size:.72rem;white-space:nowrap';
+    pTest.onclick=async()=>{
+      const acc=accounts.find(a=>a.id===accSel.value);if(!acc){toast('Kein Konto gewählt');return;}
+      if(!_slPrevTplCard){toast('Vorlage nicht geladen');return;}
+      const subj=_fillTemplate((JSON.parse(_slPrevTplCard.cardSettings||'{}').mailSubject||'').trim(),data);
+      if(!subj){toast('Kein Betreff in Vorlage');return;}
+      const bodyText=_fillTemplate(_slPrevTplCard.notes||'',data);
+      const attIds=dokFile?[dokFile.attId]:[...selAtts];
+      if(!confirm(`Test-Email an: ${acc.from_address||acc.smtp_user}\nBetreff: ${subj}`))return;
+      try{await api('POST','/mail/composer/send',{account_id:accSel.value,to:acc.from_address||acc.smtp_user,subject:subj,body:bodyText,html_body:marked.parse(bodyText,{breaks:true}),attachment_ids:attIds});toast('Test-Email gesendet');}
+      catch(e){toast('Fehler: '+(e.message||'?'));}
+    };
+    navDiv.appendChild(pTest);prevPanel.appendChild(navDiv);
+    const toDiv=el('div','');toDiv.style.cssText='padding:8px 10px;border-bottom:1px solid var(--border)';
+    toDiv.innerHTML=`<div style="font-size:.72rem;color:var(--muted)">An</div><div style="font-size:.82rem">${to}</div>`;
+    prevPanel.appendChild(toDiv);
+    const subjDiv=el('div','');subjDiv.style.cssText='padding:8px 10px;border-bottom:1px solid var(--border)';
+    subjDiv.innerHTML=`<div style="font-size:.72rem;color:var(--muted)">Betreff</div><div style="font-size:.82rem;font-weight:500">${subject}</div>`;
+    prevPanel.appendChild(subjDiv);
+    const bodyDiv=el('div','md-body');bodyDiv.style.cssText='padding:8px 10px;font-size:.8rem;line-height:1.5;max-height:220px;overflow-y:auto';
+    bodyDiv.innerHTML=bodyHtml;prevPanel.appendChild(bodyDiv);
+    if(dokFile){
+      const attDiv=el('div','');attDiv.style.cssText='padding:6px 10px;background:var(--bg3);border-top:1px solid var(--border);font-size:.75rem';
+      const ns=el('span','');ns.textContent=dokFile.name;ns.style.cssText='cursor:pointer;text-decoration:underline;color:var(--acc)';
+      ns.onclick=()=>dlAtt({url:'/attachments/'+dokFile.attId+'/file',name:dokFile.name});
+      attDiv.append(document.createTextNode('📎 '),ns);
+      if([...selAtts].length)attDiv.append(document.createTextNode(' + '+[...selAtts].length+' fester Anhang'));
+      prevPanel.appendChild(attDiv);
+    }else if([...selAtts].length){
+      const attDiv=el('div','');attDiv.style.cssText='padding:6px 10px;background:var(--bg3);border-top:1px solid var(--border);font-size:.75rem';
+      attDiv.textContent='📎 '+[...selAtts].length+' Anhang/Anhänge (fest)';prevPanel.appendChild(attDiv);
+    }
+  }
+  prevBtn.onclick=async()=>{
+    _slPrevOpen=!_slPrevOpen;prevPanel.style.display=_slPrevOpen?'':'none';
+    prevBtn.textContent=_slPrevOpen?'▲ Vorschau':'👁 Vorschau';
+    if(_slPrevOpen){_slPrevTplCard=null;await _slRenderPreview();}
+  };
+
+  // onChange-Handler
+  srcSel.onchange=_saveCs;dokSel.onchange=_saveCs;fnInp.oninput=_saveCs;accSel.onchange=_saveCs;
+  mailSel.onchange=async()=>{_saveCs();await _refreshMailAtts(mailSel.value);};
+
+  // Init
+  await _refreshAusgabe(false);
+  if(cs.activeMailCardId)await _refreshMailAtts(cs.activeMailCardId);
+  if(cs.dataSrcId)await _loadSlRows(srcSel,rowsSec);
+}
+
+// Daten laden für serienlink_card (wie _loadDocLinkRows, aber mit _melIdx)
+async function _loadSlRows(srcSel,rowsSec){
+  rowsSec.innerHTML='';
+  const srcId=srcSel.value;if(!srcId){rowsSec.innerHTML='<div style="font-size:.72rem;color:var(--muted)">Erst Datenquelle wählen.</div>';return;}
+  const src=S.cards[srcId];if(!src)return;
+  const sql=src.cardType==='table_card'?`SELECT * FROM "${src.title.trim()}"`:(src.notes||'').trim().replace(/;$/,'');
+  if(!sql){rowsSec.innerHTML='<div style="font-size:.72rem;color:var(--muted)">Keine SQL in Abfrage-Karte.</div>';return;}
+  let r;
+  try{r=await api('POST','/boards/'+S.id+'/db/query',{sql});}
+  catch(e){rowsSec.innerHTML=`<div style="font-size:.72rem;color:var(--dng)">${e.message||'Fehler'}</div>`;return;}
+  const cols=r.columns||[];
+  const melIdx=cols.findIndex(col=>col.toLowerCase()==='mêl'||col.toLowerCase()==='mel'||col==='email'||col==='e-mail');
+  const wrap=el('div','db-result-wrap');
+  const tbl=el('table','db-result-table');
+  const thead=document.createElement('thead');
+  const hr=document.createElement('tr');
+  const allCb=document.createElement('input');allCb.type='checkbox';allCb.checked=true;allCb.title='Alle';
+  const thCb=document.createElement('th');thCb.style.width='24px';thCb.appendChild(allCb);hr.appendChild(thCb);
+  cols.forEach(col=>{const th=document.createElement('th');th.textContent=col;hr.appendChild(th);});
+  thead.appendChild(hr);tbl.appendChild(thead);
+  const tbody=document.createElement('tbody');
+  (r.rows||[]).forEach((row,i)=>{
+    const tr=document.createElement('tr');
+    const cb=document.createElement('input');cb.type='checkbox';cb.checked=true;cb.dataset.idx=i;
+    const tdCb=document.createElement('td');tdCb.appendChild(cb);tr.appendChild(tdCb);
+    row.forEach((val,ci)=>{const td=document.createElement('td');td.textContent=val??'';if(ci===melIdx)td.style.color='var(--acc)';tr.appendChild(td);});
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);wrap.appendChild(tbl);
+  allCb.onchange=()=>tbody.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.checked=allCb.checked);
+  rowsSec.appendChild(wrap);
+  rowsSec._rows=r.rows;rowsSec._cols=cols;rowsSec._melIdx=melIdx;
+  const mCol=melIdx>=0?` · E-Mail: ${cols[melIdx]}`:'';
+  const info=el('div','db-table-info');info.textContent=`${r.rows.length} Zeilen${mCol}`;
+  rowsSec.appendChild(info);
+}
+
+// Liefert checked Indices oder null (= alle)
+function _getCheckedIndices(rowsSec){
+  const cbs=[...rowsSec.querySelectorAll('tbody input[type=checkbox]')];
+  if(!cbs.length)return null;
+  const checked=cbs.filter(cb=>cb.checked).map(cb=>parseInt(cb.dataset.idx));
+  return checked.length===cbs.length?null:checked;
 }
 
 function _buildTableCardView(c,cont){
@@ -5615,7 +5901,7 @@ function openModal(id){
 
   if(isDbCard){
     $('dbCardView').style.display='';$('fcView').style.display='none';$('fcNavInline').style.display='none';$('fcNavInline').innerHTML='';$('cardView').style.display='none';
-    const typeMap={table_card:'⊟ Tabelle',query_card:'⊞ Abfrage',template_card:'⊡ MD-Template',maillink_card:'✉ E-Mail-Template',doclink_card:'▤ Dok-Template'};
+    const typeMap={table_card:'⊟ Tabelle',query_card:'⊞ Abfrage',template_card:'⊡ MD-Template',maillink_card:'✉ E-Mail-Template',doclink_card:'▤ Dok-Template',serienlink_card:'⊕ Serien-Hub'};
     $('mInfo').textContent=(typeMap[c.cardType]||'DB-Karte');
     buildDbCardView(c);
   } else if(isFileCard){

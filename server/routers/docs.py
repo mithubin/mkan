@@ -246,12 +246,20 @@ def series_docs(card_id: str, body: dict = Body(...), user_id: str = Depends(cur
              json.dumps({'docSourceCardId': card_id})),
         )
 
+        # selectedIndices: None = alle Zeilen; sonst Teilmenge mit orig. Index als position
+        selected_indices = body.get('selectedIndices')
+        if selected_indices is not None:
+            indexed_rows = [(i, rows[i]) for i in selected_indices if 0 <= i < len(rows)]
+        else:
+            indexed_rows = list(enumerate(rows))
+        if not indexed_rows:
+            raise HTTPException(400, 'Keine Zeilen ausgewählt')
+
         # Pro Zeile: DOCX füllen, file_card + Anhang anlegen
         created = []
-        ext = 'docx' if output_format == 'docx' else 'pdf'
         use_pdf = output_format == 'pdf'
 
-        for idx, row_data in enumerate(rows):
+        for orig_idx, row_data in indexed_rows:
             docx_bytes = _fill_docx(tpl_att['path'], row_data)
 
             if use_pdf:
@@ -271,9 +279,9 @@ def series_docs(card_id: str, body: dict = Body(...), user_id: str = Depends(cur
                 final_ext = 'docx'
                 final_mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
-            fname = _make_filename(filename_tpl, row_data, idx, final_ext)
+            fname = _make_filename(filename_tpl, row_data, orig_idx, final_ext)
 
-            # file_card
+            # file_card: position = orig_idx → Mail-Versand matcht per origIdx
             fc_id = uid()
             conn.execute(
                 """INSERT INTO cards
@@ -281,12 +289,11 @@ def series_docs(card_id: str, body: dict = Body(...), user_id: str = Depends(cur
                     color, bg_color, cover_path, points, points_max,
                     card_type, parent_card_id, card_mode, time_spent, created_at, updated_at, created_by)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (fc_id, card['board_id'], card['col_id'], card['lane_id'], idx,
+                (fc_id, card['board_id'], card['col_id'], card['lane_id'], orig_idx,
                  fname, '', None, None, None, 0, None,
                  'file_card', out_id, 'org', 0, ts, ts, user_id),
             )
 
-            # Anhang speichern
             card_dir = os.path.join(UPLOAD_PATH, fc_id)
             os.makedirs(card_dir, exist_ok=True)
             att_id = uid()
@@ -351,8 +358,10 @@ def doclink_series(card_id: str, body: dict = Body(...), user_id: str = Depends(
             raise HTTPException(400, 'Datenquelle ist leer')
 
         if selected_indices is not None:
-            rows = [rows[i] for i in selected_indices if 0 <= i < len(rows)]
-        if not rows:
+            indexed_rows = [(i, rows[i]) for i in selected_indices if 0 <= i < len(rows)]
+        else:
+            indexed_rows = list(enumerate(rows))
+        if not indexed_rows:
             raise HTTPException(400, 'Keine Zeilen ausgewählt')
 
         # Ausgabe-Karte (gleiche Spalte/Lane wie doclink_card)
@@ -385,10 +394,9 @@ def doclink_series(card_id: str, body: dict = Body(...), user_id: str = Depends(
         )
 
         created = []
-        ext = 'docx' if output_format == 'docx' else 'pdf'
         use_pdf = output_format == 'pdf'
 
-        for idx, row_data in enumerate(rows):
+        for orig_idx, row_data in indexed_rows:
             docx_bytes = _fill_docx(tpl_att['path'], row_data)
             if use_pdf:
                 try:
@@ -405,7 +413,7 @@ def doclink_series(card_id: str, body: dict = Body(...), user_id: str = Depends(
                 final_ext = 'docx'
                 final_mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
-            fname = _make_filename(filename_tpl, row_data, idx, final_ext)
+            fname = _make_filename(filename_tpl, row_data, orig_idx, final_ext)
             fc_id = uid()
             conn.execute(
                 """INSERT INTO cards
@@ -413,7 +421,7 @@ def doclink_series(card_id: str, body: dict = Body(...), user_id: str = Depends(
                     color, bg_color, cover_path, points, points_max,
                     card_type, parent_card_id, card_mode, time_spent, created_at, updated_at, created_by)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (fc_id, card['board_id'], card['col_id'], card['lane_id'], idx,
+                (fc_id, card['board_id'], card['col_id'], card['lane_id'], orig_idx,
                  fname, '', None, None, None, 0, None,
                  'file_card', out_id, 'org', 0, ts, ts, user_id),
             )
@@ -505,6 +513,135 @@ def doc_insert_fields(card_id: str, body: dict = Body(...), user_id: str = Depen
         conn.execute('UPDATE attachments SET size=? WHERE id=?', (new_size, att['id']))
 
     return {'ok': True, 'fields': fields}
+
+
+# ── Endpoint: Seriengenerierung aus serienlink_card ───────────────────────────
+
+@router.post('/{card_id}/serienlink-docs')
+def serienlink_docs(card_id: str, body: dict = Body(...), user_id: str = Depends(current_user_id)):
+    """Seriengenerierung für serienlink_card.
+    Erwartet: dokBoardCardId (doc-mode Boardkarte), dataSrcId, outputFormat, filenameTemplate, selectedIndices.
+    file_card.position = origIdx → Mail-Matching per Checkbox-Index.
+    """
+    dok_board_card_id = body.get('dokBoardCardId')
+    data_src_id = body.get('dataSrcId')
+    output_format = body.get('outputFormat', 'docx')
+    filename_tpl = body.get('filenameTemplate') or ''
+    selected_indices = body.get('selectedIndices')
+
+    with get_conn() as conn:
+        card = conn.execute('SELECT * FROM cards WHERE id=?', (card_id,)).fetchone()
+        if not card:
+            raise HTTPException(404, 'Karte nicht gefunden')
+        require_board_access(card['board_id'], user_id, conn)
+
+        if not dok_board_card_id:
+            raise HTTPException(400, 'Keine Dok-Vorlage gewählt')
+        if not data_src_id:
+            raise HTTPException(400, 'Keine Datenquelle gewählt')
+
+        tpl_board_card = conn.execute('SELECT * FROM cards WHERE id=?', (dok_board_card_id,)).fetchone()
+        if not tpl_board_card:
+            raise HTTPException(400, 'Dok-Karte nicht gefunden')
+        tpl_cs = json.loads(tpl_board_card['card_settings'] or '{}')
+        tpl_file_card_id = tpl_cs.get('templateCardId')
+        if not tpl_file_card_id:
+            raise HTTPException(400, 'Dok-Karte hat noch kein DOCX (Vorlage anlegen)')
+        tpl_att = conn.execute(
+            'SELECT * FROM attachments WHERE card_id=? ORDER BY created_at LIMIT 1', (tpl_file_card_id,)
+        ).fetchone()
+        if not tpl_att:
+            raise HTTPException(400, 'DOCX-Anhang nicht gefunden')
+
+        src_card = conn.execute('SELECT * FROM cards WHERE id=?', (data_src_id,)).fetchone()
+        if not src_card:
+            raise HTTPException(400, 'Datenquelle nicht gefunden')
+
+        rows, columns = _load_rows(card['board_id'], src_card)
+        if not rows:
+            raise HTTPException(400, 'Datenquelle ist leer')
+
+        if selected_indices is not None:
+            indexed_rows = [(i, rows[i]) for i in selected_indices if 0 <= i < len(rows)]
+        else:
+            indexed_rows = list(enumerate(rows))
+        if not indexed_rows:
+            raise HTTPException(400, 'Keine Zeilen ausgewählt')
+
+        tpl_name = re.sub(r'\.(docx|pdf)$', '', tpl_board_card['title'] or 'Vorlage', flags=re.IGNORECASE)
+        base_title = f'Ausgabe - {tpl_name}'
+        existing = conn.execute(
+            "SELECT title FROM cards WHERE board_id=? AND col_id=? AND lane_id=? AND title LIKE ?",
+            (card['board_id'], card['col_id'], card['lane_id'], base_title + '%'),
+        ).fetchall()
+        out_title = base_title if not existing else f'{base_title} ({len(existing) + 1})'
+
+        out_id = uid()
+        ts = now()
+        pos_row = conn.execute(
+            'SELECT MAX(position) AS m FROM cards WHERE col_id=? AND lane_id=? AND parent_card_id IS NULL',
+            (card['col_id'], card['lane_id']),
+        ).fetchone()
+        out_pos = (pos_row['m'] or 0) + 1
+        conn.execute(
+            """INSERT INTO cards
+               (id, board_id, col_id, lane_id, position, title, notes,
+                color, bg_color, cover_path, points, points_max,
+                card_type, parent_card_id, card_mode, time_spent, created_at, updated_at, created_by,
+                card_settings)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (out_id, card['board_id'], card['col_id'], card['lane_id'], out_pos,
+             out_title, '', None, None, None, 0, None,
+             'card', None, 'org', 0, ts, ts, user_id,
+             json.dumps({'docSourceCardId': card_id})),
+        )
+
+        created = []
+        use_pdf = output_format == 'pdf'
+
+        for orig_idx, row_data in indexed_rows:
+            docx_bytes = _fill_docx(tpl_att['path'], row_data)
+            if use_pdf:
+                try:
+                    from routers.convert import _convert_bytes_to_pdf
+                    final_bytes = _convert_bytes_to_pdf(docx_bytes, 'docx')
+                    final_ext = 'pdf'
+                    final_mime = 'application/pdf'
+                except Exception:
+                    final_bytes = docx_bytes
+                    final_ext = 'docx'
+                    final_mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            else:
+                final_bytes = docx_bytes
+                final_ext = 'docx'
+                final_mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+            fname = _make_filename(filename_tpl, row_data, orig_idx, final_ext)
+            fc_id = uid()
+            conn.execute(
+                """INSERT INTO cards
+                   (id, board_id, col_id, lane_id, position, title, notes,
+                    color, bg_color, cover_path, points, points_max,
+                    card_type, parent_card_id, card_mode, time_spent, created_at, updated_at, created_by)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (fc_id, card['board_id'], card['col_id'], card['lane_id'], orig_idx,
+                 fname, '', None, None, None, 0, None,
+                 'file_card', out_id, 'org', 0, ts, ts, user_id),
+            )
+            card_dir = os.path.join(UPLOAD_PATH, fc_id)
+            os.makedirs(card_dir, exist_ok=True)
+            att_id = uid()
+            path = os.path.join(card_dir, f'{att_id}_{_safe_filename(fname)}')
+            with open(path, 'wb') as f:
+                f.write(final_bytes)
+            conn.execute(
+                'INSERT INTO attachments (id, card_id, filename, path, size, mime, created_at) VALUES (?,?,?,?,?,?,?)',
+                (att_id, fc_id, fname, path, len(final_bytes), final_mime, ts),
+            )
+            created.append({'fcId': fc_id, 'attId': att_id, 'name': fname})
+
+    broadcast(card['board_id'], {'type': 'board_changed', 'boardId': card['board_id']})
+    return {'count': len(created), 'cardId': out_id, 'cardTitle': out_title, 'files': created}
 
 
 # ── Endpoint: Ausgabe-Karten zu einer Quelldok-Karte auflisten ────────────────
