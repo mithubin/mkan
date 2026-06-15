@@ -1679,7 +1679,9 @@
                 style="width:72px;padding:3px 8px;font-size:.8rem;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--text)">
               <span style="font-size:.72rem;color:var(--muted)">PIN eingeben</span>
             </div>
-            <button class="btn pri" id="mailSendBtn" onclick="doComposeSend()" style="margin-top:8px;width:100%">✉ Senden</button>
+            <div style="border-top:1px solid var(--border);margin:8px 0 4px"></div>
+            <div class="slbl">Einzelne Email</div>
+            <button class="btn pri" id="mailSendBtn" onclick="doComposeSend()" style="margin-top:4px;width:100%">✉ Senden</button>
           </div>
 
           <!-- Dok-Karte (card_mode='doc') -->
@@ -1709,6 +1711,7 @@
 
           <input type="file" id="fileInput" style="display:none" multiple>
           <div id="moveSec">
+            <div style="border-top:1px solid var(--border);margin:8px 0 6px"></div>
             <div class="slbl">Karte verschieben</div>
             <div class="move-row">
               <select class="move-sel" id="moveLane"></select>
@@ -3662,7 +3665,7 @@ function mkDbCard(c){
 
 function openDbCardPicker(colId,laneId){
   const wrap=el('div','db-type-pick');
-  const types=[['serienlink_card','⊕ Serien-Hub','Seriendokumente + Serienmail in einem (empfohlen)'],['table_card','⊟ Tabellen-Karte','CSV-Daten importieren, Tabelle verwalten'],['query_card','⊞ Abfrage-Karte','SQL-Query speichern und testen'],['maillink_card','✉ E-Mail-Template','Serienmail senden (Datenquelle mit mêl-Spalte)'],['doclink_card','▤ Dok-Template','Seriendokumente aus verlinkten Vorlagen'],['template_card','⊡ MD-Template','Ausgabe-Template mit {{Feldname}}']];
+  const types=[['table_card','⊟ Tabellen-Karte','CSV-Daten importieren, Tabelle verwalten'],['query_card','⊞ Abfrage-Karte','SQL-Query speichern und testen'],['serienlink_card','⊕ Serien-Hub','Seriendokumente + Serienmail in einem (empfohlen)'],['maillink_card','✉ E-Mail-Template','Serienmail senden (Datenquelle mit mêl-Spalte)'],['doclink_card','▤ Dok-Template','Seriendokumente aus verlinkten Vorlagen'],['template_card','⊡ MD-Template','Ausgabe-Template mit {{Feldname}}']];
   types.forEach(([type,name,desc])=>{
     const btn=document.createElement('button');
     btn.innerHTML=`<strong>${name}</strong><br><span style="font-size:.7rem;color:var(--muted)">${desc}</span>`;
@@ -4387,15 +4390,15 @@ async function _buildSerienLinkCardView(c,cont){
 
   // ── INPUT ───────────────────────────────────────────────────────────────────
   cont.appendChild(secHdr('Datenquelle'));
+  const srcWarn=el('div','');srcWarn.style.cssText='font-size:.8rem;font-weight:700;color:rgba(220,38,38,.85);background:rgba(239,68,68,.12);border-radius:4px;padding:4px 7px;margin-bottom:5px;line-height:1.4';
+  srcWarn.textContent='⚠ Datenquelle nicht zwischen Dok-Erzeugung und Versand ändern – Zeilen-Zuordnung geht sonst verloren.';
+  cont.appendChild(srcWarn);
   const srcSel=mkSel('<option value="">– wählen –</option>'+dbSrcs.map(d=>`<option value="${d.id}">${d.cardType==='table_card'?'⊟':'⊞'} ${d.title}</option>`).join(''),cs.dataSrcId);
   cont.appendChild(srcSel);
   const rowsSec=el('div','');rowsSec.id='slRows_'+c.id;
   const loadBtn=el('button','btn');loadBtn.textContent='↻ Daten laden';loadBtn.style.cssText='font-size:.72rem;margin-top:5px';
   loadBtn.onclick=()=>_loadSlRows(srcSel,rowsSec);
   cont.appendChild(loadBtn);cont.appendChild(rowsSec);
-  const srcWarn=el('div','');srcWarn.style.cssText='font-size:.69rem;color:rgba(220,38,38,.85);background:rgba(239,68,68,.12);border-radius:4px;padding:4px 7px;margin-top:5px;line-height:1.4';
-  srcWarn.textContent='⚠ Datenquelle nicht zwischen Dok-Erzeugung und Versand ändern – Zeilen-Zuordnung geht sonst verloren.';
-  cont.appendChild(srcWarn);
 
   // ── DOK ─────────────────────────────────────────────────────────────────────
   cont.appendChild(secHdr('Dok-Generierung (optional)'));
