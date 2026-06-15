@@ -1,0 +1,18 @@
+# Minimal setup — mkan only, port 8000 exposed directly.
+# No reverse proxy, no OnlyOffice, no Excalidraw.
+# Good for trying it out locally or behind your own nginx/caddy.
+
+services:
+  mkan:
+    build: ./server
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/db:/app/data/db
+      - ./data/uploads:/app/data/uploads
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_PATH=/app/data/db/kanban.sqlite
+      - UPLOAD_PATH=/app/data/uploads
+      - MKAN_BASE_URL=${MKAN_BASE_URL:-http://localhost:8000}
+    restart: unless-stopped

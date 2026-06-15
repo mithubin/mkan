@@ -4,7 +4,7 @@ Folgt exakt dem Muster der anderen Services (webproxy-Netz, zentrale nginx, cert
 
 ## 1. DDNS-Eintrag bei kasserver.com
 
-Neuen DDNS-Host (deine Domain) anlegen, Credentials in
+Neuen DDNS-Host `mkan.yourdomain.example` anlegen, Credentials in
 `/usr/local/bin/update-ddns-all.sh` eintragen (analog zu den anderen Einträgen).
 
 ## 2. Verzeichnis und Daten anlegen
@@ -65,7 +65,7 @@ docker compose logs -f mkan   # kurz beobachten
 ```bash
 curl -X POST https://mkan.yourdomain.example/auth/register \
   -H 'Content-Type: application/json' \
-  -d '{"name":"Milan","email":"admin@yourserver.example","password":"SICHERES_PASSWORT"}'
+  -d '{"name":"Milan","email":"linux@milan.how","password":"SICHERES_PASSWORT"}'
 ```
 
 ## Betrieb

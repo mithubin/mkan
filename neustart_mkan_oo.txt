@@ -25,7 +25,7 @@ sudo docker exec onlyoffice supervisorctl restart ds:docservice ds:converter
 
 === SCHRITT 5: mkan starten ===
 
-cd /path/to/mkan/server
+cd /home/milan/nexLO/tec_lo/cloudclaude/SKRIPTE+nuc/trello-klon-sv/server
 
 OO_BACKEND=http://localhost:8088 OO_MKAN_BASE=http://host.docker.internal:7879 OO_PUBLIC_URL=http://localhost:7879/oo uvicorn main:app --host 0.0.0.0 --port 7879 --reload
 

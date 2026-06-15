@@ -29,6 +29,18 @@ scp /tmp/mkan-deploy.tar.gz user@yourserver:/tmp/
 ssh user@yourserver "cd /tmp && rm -rf mkan-server && mkdir mkan-server && tar xzf mkan-deploy.tar.gz -C mkan-server && bash mkan-server/deploy-mkan.sh"
 ```
 
+## Public-Repo (GitHub)
+`../mkan-public/` — bereinigter Spiegel ohne History, ohne sensitive Daten.
+Repo: `https://github.com/mithubin/mkan`
+
+```bash
+# Sync + Push nach GitHub (aus trello-klon-sv heraus):
+bash publish-public.sh                         # auto-Message
+bash publish-public.sh "feat: neues Feature"   # eigene Message
+```
+
+`publish-public.sh` kopiert alle tracked Files (außer `trel_sv userdata.md`), ersetzt sensitive Strings (OO-Secret, NUC-Hostname, lokale Pfade) und pusht nach GitHub. Pfade relativ zu `$0` — funktioniert von überall.
+
 ## Routen-Übersicht (alle implementiert)
 - `GET /`, `GET /health`
 - `/auth/*` – register, login, change-password, me
@@ -363,15 +375,19 @@ Beide Buttons (`galNavigate` ← → und `galSkip` ⏮⏭/Tab) respektieren den 
 
 ## Lokale Entwicklung
 ```bash
-# DB vom NUC spiegeln
+# Schnellstart (kein Docker, kein NUC):
+bash start-local.sh   # richtet venv ein, startet Server, öffnet Browser
+
+# DB vom NUC spiegeln (optional, für Tests mit echten Daten):
 scp user@yourserver:/mnt/mkan/db/kanban.sqlite server/data/db/kanban.sqlite
 
-# venv + Server starten
+# manuell:
 cd server && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -q
 .venv/bin/uvicorn main:app --port 8000 --reload
 # → http://localhost:8000
 ```
 Uploads/Cover zeigen lokal 404 (Dateien nur auf NUC) — kein Problem, nur UI testen.
+OO-Features (Dokument-Edit, Seriendok) nicht verfügbar ohne laufende OO-Instanz.
 
 ## Arbeitshinweise
 - Uvicorn läuft aus `server/` → Imports ohne Paketpräfix (`from db import ...`)

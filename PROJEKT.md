@@ -30,6 +30,8 @@ Marktlücke: Nextcloud Deck (blass), Planka (keine Swimlanes), Notion (US-Cloud)
 | **Excalidraw** | https://cali.milan.how/ — iframe-Overlay für .excalidraw-Dateikarten |
 | **Lokal** | `cd server && .venv/bin/uvicorn main:app --port 8000 --reload` → http://localhost:8000 |
 | **Deploy** | `bash deploy.sh` oder manuell: cp + tar + scp + ssh (Ablauf in DEPLOY.md) |
+| **GitHub** | https://github.com/mithubin/mkan — `bash publish-public.sh` synct + pusht |
+| **Lokal** | `bash start-local.sh` — Python 3.10+, kein Docker, öffnet Browser automatisch |
 
 ---
 
