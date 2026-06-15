@@ -237,11 +237,13 @@ def series_docs(card_id: str, body: dict = Body(...), user_id: str = Depends(cur
             """INSERT INTO cards
                (id, board_id, col_id, lane_id, position, title, notes,
                 color, bg_color, cover_path, points, points_max,
-                card_type, parent_card_id, card_mode, time_spent, created_at, updated_at, created_by)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                card_type, parent_card_id, card_mode, time_spent, created_at, updated_at, created_by,
+                card_settings)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (out_id, card['board_id'], card['col_id'], card['lane_id'], out_pos,
              out_title, '', None, None, None, 0, None,
-             'card', None, 'org', 0, ts, ts, user_id),
+             'card', None, 'org', 0, ts, ts, user_id,
+             json.dumps({'docSourceCardId': card_id})),
         )
 
         # Pro Zeile: DOCX füllen, file_card + Anhang anlegen
@@ -373,11 +375,13 @@ def doclink_series(card_id: str, body: dict = Body(...), user_id: str = Depends(
             """INSERT INTO cards
                (id, board_id, col_id, lane_id, position, title, notes,
                 color, bg_color, cover_path, points, points_max,
-                card_type, parent_card_id, card_mode, time_spent, created_at, updated_at, created_by)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                card_type, parent_card_id, card_mode, time_spent, created_at, updated_at, created_by,
+                card_settings)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (out_id, card['board_id'], card['col_id'], card['lane_id'], out_pos,
              out_title, '', None, None, None, 0, None,
-             'card', None, 'org', 0, ts, ts, user_id),
+             'card', None, 'org', 0, ts, ts, user_id,
+             json.dumps({'docSourceCardId': card_id})),
         )
 
         created = []
@@ -501,3 +505,64 @@ def doc_insert_fields(card_id: str, body: dict = Body(...), user_id: str = Depen
         conn.execute('UPDATE attachments SET size=? WHERE id=?', (new_size, att['id']))
 
     return {'ok': True, 'fields': fields}
+
+
+# ── Endpoint: Ausgabe-Karten zu einer Quelldok-Karte auflisten ────────────────
+
+@router.get('/{card_id}/ausgabe-cards')
+def list_ausgabe_cards(card_id: str, user_id: str = Depends(current_user_id)):
+    """Gibt alle Ausgabe-Karten zurück, die aus card_id generiert wurden.
+    Matching: card_settings.docSourceCardId == card_id (gespeichert beim Generieren).
+    Response: [{id, title, createdAt, fileCount}]
+    """
+    with get_conn() as conn:
+        card = conn.execute('SELECT * FROM cards WHERE id=?', (card_id,)).fetchone()
+        if not card:
+            raise HTTPException(404, 'Karte nicht gefunden')
+        require_board_access(card['board_id'], user_id, conn)
+
+        all_cards = conn.execute(
+            "SELECT id, title, created_at, card_settings FROM cards WHERE board_id=? AND card_type='card' AND card_settings IS NOT NULL",
+            (card['board_id'],),
+        ).fetchall()
+
+        result = []
+        for c in all_cards:
+            try:
+                cs = json.loads(c['card_settings'] or '{}')
+            except Exception:
+                continue
+            if cs.get('docSourceCardId') != card_id:
+                continue
+
+            # file_cards with their first attachment, ordered by position
+            fc_rows = conn.execute(
+                """SELECT fc.id AS fc_id, fc.position, a.id AS att_id, a.filename
+                   FROM cards fc
+                   LEFT JOIN attachments a ON a.card_id=fc.id
+                   WHERE fc.parent_card_id=? AND fc.card_type='file_card'
+                   ORDER BY fc.position, a.created_at""",
+                (c['id'],),
+            ).fetchall()
+
+            # de-duplicate: keep first attachment per file_card
+            seen = {}
+            files = []
+            for row in fc_rows:
+                if row['fc_id'] not in seen:
+                    seen[row['fc_id']] = True
+                    if row['att_id']:
+                        files.append({'fcId': row['fc_id'], 'attId': row['att_id'],
+                                      'name': row['filename'], 'position': row['position']})
+
+            result.append({
+                'id': c['id'],
+                'title': c['title'],
+                'createdAt': c['created_at'],
+                'fileCount': len(files),
+                'files': files,
+            })
+
+        # Neueste zuerst
+        result.sort(key=lambda x: x['createdAt'], reverse=True)
+        return result

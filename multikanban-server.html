@@ -3871,15 +3871,50 @@ async function _buildEmailCardView(c,cont){
 
   const tplRef={get value(){return activeTplId;}};
 
+  // Dok-Anhang (optional): Ausgabe-Karte einer Dok-Karte pro Zeile anfügen
+  const dokSec=_dbSec(cont,'📎 Dok-Anhang (optional)');
+  dokSec.style.marginTop='8px';
+  const dokHint=el('div','');dokHint.style.cssText='font-size:.72rem;color:var(--muted);margin-top:2px';
+  dokHint.textContent='Dateien aus einer Ausgabe-Karte (Dok-Serie) pro Zeile anhängen.';
+  dokSec.appendChild(dokHint);
+
+  const dokSrcs=Object.values(S.cards).filter(x=>x.cardType==='doclink_card'||(x.cardMode==='doc'&&x.cardType==='card'));
+  const dokCardSel=el('select','sl-inp');dokCardSel.style.cssText='width:100%;font-size:.75rem;margin-top:4px';
+  dokCardSel.innerHTML='<option value="">– kein Dok-Anhang –</option>'+dokSrcs.map(d=>`<option value="${d.id}">${d.cardType==='doclink_card'?'▤ ':''}${d.title}</option>`).join('');
+  dokSec.appendChild(dokCardSel);
+
+  const ausgabeSel=el('select','sl-inp');ausgabeSel.style.cssText='width:100%;font-size:.75rem;margin-top:4px;display:none';
+  dokSec.appendChild(ausgabeSel);
+
+  const ausgabeRef={value:'',files:[]};
+
+  async function _loadAusgabeKarten(dokCardId){
+    ausgabeSel.innerHTML='';ausgabeSel.style.display='none';ausgabeRef.value='';ausgabeRef.files=[];
+    if(!dokCardId)return;
+    ausgabeSel.innerHTML='<option value="">– Ausgabe-Karten laden… –</option>';ausgabeSel.style.display='';
+    try{
+      const list=await api('GET','/cards/'+dokCardId+'/ausgabe-cards');
+      if(!list.length){ausgabeSel.innerHTML='<option value="">Keine Ausgabe-Karten vorhanden</option>';return;}
+      ausgabeSel.innerHTML='<option value="">– Ausgabe-Karte wählen –</option>'+
+        list.map(a=>`<option value="${a.id}" data-files='${JSON.stringify(a.files||[])}'>${a.title} (${a.fileCount} Dateien)</option>`).join('');
+    }catch(e){ausgabeSel.innerHTML=`<option value="">Fehler: ${e.message||'?'}</option>`;}
+  }
+  dokCardSel.onchange=()=>_loadAusgabeKarten(dokCardSel.value);
+  ausgabeSel.onchange=()=>{
+    const opt=ausgabeSel.selectedOptions[0];
+    ausgabeRef.value=ausgabeSel.value||'';
+    try{ausgabeRef.files=opt&&ausgabeRef.value?JSON.parse(opt.dataset.files||'[]'):[];}catch{ausgabeRef.files=[];}
+  };
+
   // Sende-Buttons
   const btnRow=el('div','');btnRow.style.cssText='display:flex;gap:6px;margin-top:10px;flex-wrap:wrap';
   const testBtn=el('button','btn');testBtn.textContent='✉ Test-Email';
-  testBtn.onclick=()=>_doSeriesSend(c,srcSel,tplRef,accSel,selAtts,rowsSec,accounts,true);
+  testBtn.onclick=()=>_doSeriesSend(c,srcSel,tplRef,accSel,selAtts,rowsSec,accounts,true,ausgabeRef);
   const sendBtn=el('button','btn pri');sendBtn.textContent='✉ Senden';
   sendBtn.onclick=()=>{
     if(!activeTplId){toast('Keine aktive Vorlage gewählt');return;}
     if(S.cards[activeTplId]&&S.cards[activeTplId].cardMode!=='email'){toast('Aktive Vorlage nicht mehr im Mail-Modus – Versand blockiert');return;}
-    _doSeriesSend(c,srcSel,tplRef,accSel,selAtts,rowsSec,accounts,false);
+    _doSeriesSend(c,srcSel,tplRef,accSel,selAtts,rowsSec,accounts,false,ausgabeRef);
   };
   btnRow.append(testBtn,sendBtn);cont.appendChild(btnRow);
 
@@ -3925,7 +3960,7 @@ async function _loadEmailCardRows(c,srcSel,rowsSec){
   rowsSec.appendChild(info);
 }
 
-async function _doSeriesSend(c,srcSel,tplSel,accSel,selAtts,rowsSec,accounts,isTest){
+async function _doSeriesSend(c,srcSel,tplSel,accSel,selAtts,rowsSec,accounts,isTest,ausgabeRef){
   const aid=accSel.value;if(!aid){toast('Kein Absenderkonto gewählt');return;}
   const tid=tplSel.value;if(!tid){toast('Keine Vorlage gewählt');return;}
   if(S.cards[tid]&&S.cards[tid].cardMode!=='email'){toast('Vorlage nicht mehr im Mail-Modus – Versand abgebrochen');return;}
@@ -3935,7 +3970,6 @@ async function _doSeriesSend(c,srcSel,tplSel,accSel,selAtts,rowsSec,accounts,isT
   try{tplCard=await api('GET','/cards/'+tid);}catch{toast('Template-Karte nicht ladbar');return;}
   const acc=accounts.find(a=>a.id===aid);
   const cols=rowsSec._cols;const melIdx=rowsSec._melIdx;
-  const attIds=[...selAtts];
 
   // Betreff kommt ausschließlich aus der Vorlage-Karte (mailSubject in cardSettings)
   const _tplCs=JSON.parse(tplCard.cardSettings||'{}');
@@ -3943,26 +3977,39 @@ async function _doSeriesSend(c,srcSel,tplSel,accSel,selAtts,rowsSec,accounts,isT
   if(!_subjectTpl){toast('⚠ Kein Betreff in der Vorlage-Karte – Versand abgebrochen');return;}
   const _bodyTpl=tplCard.notes||'';
 
-  let targetRows;
+  // Dok-Anhang: position→attId-Map aufbauen (wenn Ausgabe-Karte gewählt)
+  const _ausgabeFiles=ausgabeRef?.files||[];
+  const _dokAttMap={};// position→attId
+  _ausgabeFiles.forEach(f=>{if(f.attId!=null&&f.position!=null)_dokAttMap[f.position]=f.attId;});
+  const _hasDokAtt=ausgabeRef?.value&&_ausgabeFiles.length>0;
+  if(_hasDokAtt&&_ausgabeFiles.length!==rowsSec._rows.length){
+    if(!confirm(`Achtung: Ausgabe-Karte hat ${_ausgabeFiles.length} Dateien, Datenquelle hat ${rowsSec._rows.length} Zeilen. Trotzdem senden?`))return;
+  }
+
+  // targetRows mit Originalindex, damit Dok-Anhang per Position passt
+  let targetRows; // [{row, origIdx}]
   if(isTest){
-    targetRows=[rowsSec._rows[0]];
+    targetRows=[{row:rowsSec._rows[0],origIdx:0}];
     const testTo=acc?.from_address||acc?.smtp_user||'(leer)';
     if(!confirm(`Test-Email senden an: ${testTo}\n(Konto: ${acc?.name||aid})`))return;
   }else{
     const checked=[...rowsSec.querySelectorAll('tbody input[type=checkbox]:checked')].map(cb=>parseInt(cb.dataset.idx));
     const hasSelection=checked.length>0&&checked.length<rowsSec._rows.length;
+    let rawRows;
     if(hasSelection){
       const ans=confirm(`${checked.length} ausgewählte senden?\n(Abbrechen = alle ${rowsSec._rows.length})`);
-      targetRows=ans?rowsSec._rows.filter((_,i)=>checked.includes(i)):rowsSec._rows;
-      if(!ans&&!confirm(`Alle ${rowsSec._rows.length} E-Mails senden?`))return;
+      if(ans){rawRows=rowsSec._rows.map((r,i)=>({row:r,origIdx:i})).filter(x=>checked.includes(x.origIdx));}
+      else{if(!confirm(`Alle ${rowsSec._rows.length} E-Mails senden?`))return;rawRows=rowsSec._rows.map((r,i)=>({row:r,origIdx:i}));}
     }else{
       if(!confirm(`${rowsSec._rows.length} E-Mails senden?`))return;
-      targetRows=rowsSec._rows;
+      rawRows=rowsSec._rows.map((r,i)=>({row:r,origIdx:i}));
     }
+    targetRows=rawRows;
   }
 
+  const fixedAttIds=[...selAtts];
   let sent=0,errors=[];
-  for(const row of targetRows){
+  for(const {row,origIdx} of targetRows){
     const data={datum:new Date().toLocaleDateString('de-DE')};
     cols.forEach((col,i)=>{data[col]=row[i]??'';data[col.toLowerCase()]=row[i]??'';});
     const to=isTest?(acc?.from_address||acc?.smtp_user||''):(row[melIdx]||'');
@@ -3970,13 +4017,16 @@ async function _doSeriesSend(c,srcSel,tplSel,accSel,selAtts,rowsSec,accounts,isT
     const subject=_fillTemplate(_subjectTpl,data);
     const bodyText=_fillTemplate(_bodyTpl,data);
     const bodyHtml=marked.parse(bodyText,{breaks:true});
+    // Pro-Zeile-Anhang aus Dok-Ausgabe; Fallback auf fest gewählte Anhänge
+    const rowAttIds=_hasDokAtt&&_dokAttMap[origIdx]!=null?[_dokAttMap[origIdx]]:fixedAttIds;
     try{
-      await api('POST','/mail/composer/send',{account_id:aid,to,subject,body:bodyText,html_body:bodyHtml,attachment_ids:attIds});
+      await api('POST','/mail/composer/send',{account_id:aid,to,subject,body:bodyText,html_body:bodyHtml,attachment_ids:rowAttIds});
       sent++;
     }catch(e){errors.push(`${to}: ${e.message||'Fehler'}`);}
   }
+  const total=targetRows.length;
   if(isTest){toast(sent?`Test-Email an ${acc?.from_address||acc?.smtp_user} gesendet`:'Test fehlgeschlagen: '+(errors[0]||''));return;}
-  if(errors.length)toast(`${sent}/${targetRows.length} gesendet — ${errors.length} Fehler: ${errors.slice(0,2).join(', ')}`);
+  if(errors.length)toast(`${sent}/${total} gesendet — ${errors.length} Fehler: ${errors.slice(0,2).join(', ')}`);
   else toast(`${sent} E-Mail${sent===1?'':'s'} gesendet`);
 }
 
