@@ -62,6 +62,7 @@
     .db-card-badge.badge-email { background:rgba(14,165,233,.12); border:1px solid rgba(14,165,233,.4); color:#38bdf8; }
     .db-card-badge.badge-doc { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.4); color:#f87171; }
     .db-card-badge.badge-serie { background:rgba(168,85,247,.12); border:1px solid rgba(168,85,247,.4); color:#c084fc; }
+    .db-card-badge.badge-log   { background:rgba(100,116,139,.1); border:1px solid rgba(100,116,139,.35); color:#94a3b8; }
     .db-section { margin-bottom:6px; }
     .db-section-hdr { font-size:.58rem; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); padding:4px 2px 3px; opacity:.7; }
     .db-type-pick { display:flex; flex-direction:column; gap:5px; padding:8px 0; }
@@ -3611,6 +3612,7 @@ function mkDbCell(lane, col){
     ['Abfragen',    allCards.filter(c=>c.cardType==='query_card')],
     ['Serien-Hub',  allCards.filter(c=>c.cardType==='serienlink_card')],
     ['Vorlagen',    allCards.filter(c=>['maillink_card','doclink_card','template_card'].includes(c.cardType))],
+    ['Logs',        allCards.filter(c=>c.cardType==='log_card')],
   ].forEach(([label,cards])=>{
     if(!cards.length)return;
     const sec=el('div','db-section');
@@ -3645,7 +3647,7 @@ function mkDbCell(lane, col){
 
 function mkDbCard(c){
   const e=el('div','db-card');e.dataset.cid=c.id;e.draggable=true;
-  const typeMap={table_card:['Tabelle','badge-table'],query_card:['Abfrage','badge-query'],template_card:['MD-Tpl','badge-template'],maillink_card:['Mail-Tpl','badge-email'],doclink_card:['Dok-Tpl','badge-doc'],serienlink_card:['Serien-Hub','badge-serie']};
+  const typeMap={table_card:['Tabelle','badge-table'],query_card:['Abfrage','badge-query'],template_card:['MD-Tpl','badge-template'],maillink_card:['Mail-Tpl','badge-email'],doclink_card:['Dok-Tpl','badge-doc'],serienlink_card:['Serien-Hub','badge-serie'],log_card:['Log','badge-log']};
   const [lbl,cls]=typeMap[c.cardType]||['DB','badge-query'];
   const handle=el('span','db-drag-handle');handle.textContent='⠿';handle.title='Reihenfolge ändern';
   const title=el('div','db-card-title');title.textContent=c.title;
@@ -3690,7 +3692,7 @@ function openDbCardPicker(colId,laneId){
 
 // ── DB card modal ─────────────────────────────────────────────────────────
 
-const DB_CARD_TYPES=['table_card','query_card','template_card','maillink_card','doclink_card','serienlink_card'];
+const DB_CARD_TYPES=['table_card','query_card','template_card','maillink_card','doclink_card','serienlink_card','log_card'];
 
 function buildDbCardView(c){
   const cont=$('dbCardContent');cont.innerHTML='';
@@ -3700,6 +3702,14 @@ function buildDbCardView(c){
   else if(c.cardType==='maillink_card') _buildEmailCardView(c,cont);
   else if(c.cardType==='doclink_card') _buildDocLinkCardView(c,cont);
   else if(c.cardType==='serienlink_card') _buildSerienLinkCardView(c,cont);
+  else if(c.cardType==='log_card') _buildLogCardView(c,cont);
+}
+
+function _buildLogCardView(c,cont){
+  const pre=el('pre','');
+  pre.style.cssText='font-size:.73rem;line-height:1.6;color:var(--text);white-space:pre-wrap;word-break:break-word;margin:0;padding:4px 2px;font-family:inherit';
+  pre.textContent=c.notes||'(Leerer Log)';
+  cont.appendChild(pre);
 }
 
 async function _buildEmailCardView(c,cont){
@@ -4152,6 +4162,28 @@ async function _doSeriesSend(c,srcSel,tplSel,accSel,selAtts,rowsSec,accounts,isT
   if(isTest){toast(sent?`✉ Test gesendet (${sent} Empfänger)`:'Test fehlgeschlagen: '+(errors[0]||''));return;}
   if(errors.length)toast(`${sent}/${total} gesendet — ${errors.length} Fehler: ${errors.slice(0,2).join(', ')}`);
   else toast(`${sent} E-Mail${sent===1?'':'s'} gesendet`);
+
+  // Log-Karte in DB-Spalte anlegen
+  try{
+    const ts=new Date().toLocaleString('de-DE');
+    const srcName=S.cards[srcSel.value]?.title||srcSel.value||'?';
+    const tplName=tplCard?.title||'?';
+    const accName=acc?.name||acc?.smtp_user||aid;
+    const logLines=[
+      `Serienversand  ${ts}`,
+      `Vorlage:       ${tplName}`,
+      `Datenquelle:   ${srcName}`,
+      `Konto:         ${accName}`,
+      `Gesendet:      ${sent} / ${total}`,
+    ];
+    if(errors.length){logLines.push('');logLines.push('Fehler:');errors.forEach(e=>logLines.push('  '+e));}
+    const logText=logLines.join('\n');
+    const logTitle=`Log ${ts}`;
+    const nc=await api('POST','/cards',{boardId:S.id,colId:c.colId,laneId:c.laneId,title:logTitle,cardType:'log_card',notes:logText});
+    const blob=new Blob([logText],{type:'text/plain'});
+    const fd2=new FormData();fd2.append('file',blob,'versandlog.txt');
+    await apiForm('POST','/attachments/cards/'+nc.id,fd2);
+  }catch(e){console.warn('Log-Karte konnte nicht erstellt werden',e);}
 }
 
 function _dbSec(parent,label){
@@ -4361,6 +4393,9 @@ async function _buildSerienLinkCardView(c,cont){
   const loadBtn=el('button','btn');loadBtn.textContent='↻ Daten laden';loadBtn.style.cssText='font-size:.72rem;margin-top:5px';
   loadBtn.onclick=()=>_loadSlRows(srcSel,rowsSec);
   cont.appendChild(loadBtn);cont.appendChild(rowsSec);
+  const srcWarn=el('div','');srcWarn.style.cssText='font-size:.69rem;color:var(--muted);margin-top:5px;line-height:1.4';
+  srcWarn.textContent='⚠ Datenquelle nicht zwischen Dok-Erzeugung und Versand ändern – Zeilen-Zuordnung geht sonst verloren.';
+  cont.appendChild(srcWarn);
 
   // ── DOK ─────────────────────────────────────────────────────────────────────
   cont.appendChild(secHdr('Dok-Generierung (optional)'));
@@ -5965,7 +6000,7 @@ function openModal(id){
 
   if(isDbCard){
     $('dbCardView').style.display='';$('fcView').style.display='none';$('fcNavInline').style.display='none';$('fcNavInline').innerHTML='';$('cardView').style.display='none';
-    const typeMap={table_card:'⊟ Tabelle',query_card:'⊞ Abfrage',template_card:'⊡ MD-Template',maillink_card:'✉ E-Mail-Template',doclink_card:'▤ Dok-Template',serienlink_card:'⊕ Serien-Hub'};
+    const typeMap={table_card:'⊟ Tabelle',query_card:'⊞ Abfrage',template_card:'⊡ MD-Template',maillink_card:'✉ E-Mail-Template',doclink_card:'▤ Dok-Template',serienlink_card:'⊕ Serien-Hub',log_card:'📋 Log'};
     $('mInfo').textContent=(typeMap[c.cardType]||'DB-Karte');
     buildDbCardView(c);
   } else if(isFileCard){
