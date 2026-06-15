@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mkan — Architektur &amp; OO-Integration</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--surf:#161b22;--surf2:#1c2128;--border:#30363d;
+  --text:#e6edf3;--muted:#7d8590;--dim:#484f58;
+  --c-browser:#388bfd;--c-mkan:#2ea043;--c-oo:#e3b341;
+  --c-nginx:#bc8cff;--c-docker:#1f6feb;--c-err:#f85149;--c-warn:#d29922;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
+  font-size:15px;line-height:1.7;max-width:980px;margin:0 auto;padding:2rem 1.5rem 5rem}
+h1{font-size:1.75rem;font-weight:700;margin-bottom:.4rem}
+h2{font-size:1.2rem;margin:2.5rem 0 1rem;border-bottom:1px solid var(--border);
+  padding-bottom:.4rem;color:#cdd9e5;font-weight:600}
+h3{font-size:1rem;margin:1.4rem 0 .5rem;color:#adbac7;font-weight:600}
+p{margin-bottom:.85rem;color:#adbac7}
+code{background:var(--surf2);border:1px solid var(--border);padding:0 .4em;
+  border-radius:4px;font-size:.88em;font-family:'Cascadia Code','Fira Code',monospace;color:#f0883e}
+em{color:#cdd9e5;font-style:normal;font-weight:500}
+
+.lead{font-size:1.05rem;color:var(--muted);margin-bottom:2rem}
+
+/* tags */
+.tag{display:inline-block;padding:.15em .55em;border-radius:20px;font-size:.72rem;
+  font-weight:700;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle;margin:0 2px}
+.t-http{background:#0d2d5c;color:#79c0ff}
+.t-ws{background:#3b2e00;color:#e3b341}
+.t-cors{background:#4b1c1c;color:#f85149}
+.t-tls{background:#1a2d1a;color:#56d364}
+.t-jwt{background:#2a1060;color:#bc8cff}
+
+/* cards */
+.card{background:var(--surf);border:1px solid var(--border);border-radius:8px;
+  padding:1.1rem 1.4rem;margin-bottom:1rem}
+.card.warn{border-color:#9e6a03;background:#161208}
+.card.err{border-color:#6e2726;background:#130d0d}
+.card.info{border-color:#1c4b8c;background:#0d1621}
+.card.ok{border-color:#1a5e29;background:#0d1a10}
+
+/* tabs */
+.tabs{display:flex;gap:.4rem;margin-bottom:1rem;flex-wrap:wrap}
+.tab-btn{padding:.45rem 1.1rem;border:1px solid var(--border);background:var(--surf);
+  color:var(--muted);border-radius:6px;cursor:pointer;font-size:.88rem;
+  transition:all .15s;font-family:inherit}
+.tab-btn:hover{color:var(--text);background:var(--surf2)}
+.tab-btn.active{background:var(--surf2);color:var(--text);border-color:#58a6ff}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* diagrams */
+.diag-wrap{background:var(--surf);border:1px solid var(--border);border-radius:8px;
+  padding:1rem 1rem .5rem;margin-bottom:1rem;overflow:visible}
+.diag-wrap svg{width:100%;height:auto;overflow:visible}
+
+/* flow controls */
+.flow-controls{display:flex;gap:.5rem;align-items:center;margin:.8rem 0;flex-wrap:wrap}
+.ctrl-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem 1rem;
+  border:1px solid var(--border);background:var(--surf2);color:var(--text);
+  border-radius:6px;cursor:pointer;font-size:.85rem;font-family:inherit;transition:all .15s}
+.ctrl-btn:hover{border-color:#58a6ff;background:#0d1621}
+.ctrl-btn.active{background:#0d2d17;border-color:var(--c-mkan);color:#3fb950}
+.ctrl-btn.playing{background:#1a2d10;border-color:var(--c-mkan)}
+
+.step-list{display:flex;gap:.4rem;flex-wrap:wrap;margin:.8rem 0}
+.step{padding:.25rem .7rem;background:var(--surf2);border:1px solid var(--border);
+  border-radius:4px;font-size:.78rem;color:var(--muted);cursor:pointer;transition:all .15s}
+.step:hover{color:var(--text)}
+.step.active{background:#0d1f0d;border-color:var(--c-mkan);color:#3fb950}
+.step.done{color:var(--dim);border-color:var(--dim)}
+
+.step-desc{background:var(--surf2);border:1px solid var(--border);border-radius:6px;
+  padding:.7rem 1rem;font-size:.88rem;color:#adbac7;min-height:2.8rem;margin-bottom:.5rem}
+.step-desc strong{color:var(--text)}
+.step-desc .proto{font-size:.75rem;margin-left:.4rem}
+
+/* comparison grid */
+.cmp-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+@media(max-width:620px){.cmp-grid{grid-template-columns:1fr}}
+.cmp-col h4{font-size:.9rem;font-weight:600;margin-bottom:.8rem;padding:.4rem .8rem;
+  border-radius:6px;background:var(--surf2)}
+.cmp-col.lokal h4{border-left:3px solid var(--c-browser);color:var(--c-browser)}
+.cmp-col.nuc h4{border-left:3px solid var(--c-nginx);color:var(--c-nginx)}
+
+/* highlight rows */
+.hrow{display:flex;gap:.6rem;padding:.5rem .7rem;border-radius:5px;margin-bottom:.4rem;
+  font-size:.88rem;color:#adbac7;align-items:flex-start}
+.hrow .ico{flex-shrink:0;font-size:.95rem;margin-top:.1rem}
+.hrow.ok{background:#0a1f0d;border-left:3px solid #2ea043}
+.hrow.bad{background:#180a0a;border-left:3px solid var(--c-err)}
+.hrow.warn{background:#1a1500;border-left:3px solid var(--c-warn)}
+.hrow.note{background:#0d1621;border-left:3px solid #388bfd}
+
+/* protocol blocks */
+.proto-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.8rem;margin:1rem 0}
+.proto-card{background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:.9rem 1.1rem}
+.proto-card h4{font-size:.88rem;font-weight:700;margin-bottom:.5rem}
+
+/* limits table */
+.limits-table{width:100%;border-collapse:collapse;font-size:.88rem;margin:1rem 0}
+.limits-table th,.limits-table td{padding:.55rem .8rem;border:1px solid var(--border);text-align:left;vertical-align:top}
+.limits-table th{background:var(--surf2);color:#adbac7;font-weight:600}
+.limits-table tr:hover td{background:var(--surf2)}
+.limits-table .cat{color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em}
+td.fix{color:#56d364}
+td.conf{color:#f0883e}
+td.hard{color:#f85149}
+
+/* role badge */
+.role-demo{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin:1rem 0}
+.role-box{padding:.7rem 1.2rem;border-radius:8px;text-align:center;font-size:.85rem;min-width:130px}
+.role-box .name{font-weight:700;font-size:1rem;margin-bottom:.3rem}
+.role-box .roles{display:flex;gap:.3rem;justify-content:center;flex-wrap:wrap;margin-top:.4rem}
+.role-badge{padding:.15em .5em;border-radius:3px;font-size:.72rem;font-weight:600}
+.rb-sv{background:#0d2d17;border:1px solid var(--c-mkan);color:#56d364}
+.rb-cl{background:#0d1621;border:1px solid var(--c-browser);color:#79c0ff}
+
+/* scrollspy nav */
+.toc{background:var(--surf);border:1px solid var(--border);border-radius:8px;
+  padding:.8rem 1.2rem;margin-bottom:2rem;font-size:.88rem}
+.toc strong{color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:.4rem}
+.toc a{color:var(--muted);text-decoration:none;display:inline-block;margin-right:1rem;margin-bottom:.2rem}
+.toc a:hover{color:var(--text)}
+
+/* Terms & Tooltip */
+.term{border-bottom:1.5px dotted rgba(63,185,80,.55);cursor:help;transition:border-color .15s}
+.term:hover{border-bottom-color:var(--c-mkan)}
+#gloss-tip{display:none;position:absolute;z-index:9999;max-width:295px;
+  background:#1c2128;border:1px solid #1c4b8c;border-radius:8px;
+  padding:.7rem 1rem;font-size:.82rem;color:#adbac7;line-height:1.55;
+  pointer-events:none;box-shadow:0 6px 20px rgba(0,0,0,.6)}
+#gloss-tip strong{color:var(--text);display:block;margin-bottom:.15rem;font-size:.88rem}
+#gloss-tip i{color:var(--muted);font-style:italic;font-size:.78rem;display:block;margin-bottom:.3rem}
+/* Glossary section */
+#glossar-search{width:100%;padding:.5rem .9rem;background:var(--surf2);
+  border:1px solid var(--border);border-radius:6px;color:var(--text);
+  font-size:.9rem;font-family:inherit;margin-bottom:1rem;outline:none}
+#glossar-search:focus{border-color:#388bfd}
+#glossar-search::placeholder{color:var(--muted)}
+.g-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:.7rem}
+.g-card{background:var(--surf2);border:1px solid var(--border);border-radius:7px;padding:.75rem 1rem;transition:border-color .15s}
+.g-card:hover{border-color:#388bfd}
+.g-card.hidden{display:none}
+.g-card .gt{font-weight:700;font-size:.88rem;color:var(--c-mkan);margin-bottom:.2rem;font-family:'Cascadia Code','Fira Code',monospace}
+.g-card .gs{font-size:.78rem;color:var(--muted);font-style:italic;margin-bottom:.25rem}
+.g-card .gd{font-size:.82rem;color:#8b949e;line-height:1.5}
+
+/* animated SVG paths */
+@keyframes dash-flow{to{stroke-dashoffset:0}}
+.anim-path{stroke-dasharray:8,5;stroke-dashoffset:200;
+  animation:dash-flow 2s linear infinite;animation-play-state:paused}
+.anim-path.running{animation-play-state:running}
+.packet{opacity:0;transition:opacity .3s}
+.packet.visible{opacity:1}
+</style>
+</head>
+<body>
+
+<h1>mkan — Architektur &amp; OnlyOffice-Integration</h1>
+<p class="lead">Wie ein Server-Setup im Kleinen funktioniert, was lokal anders ist als auf dem NUC, und warum OnlyOffice immer wieder für Konfigurationsschmerzen sorgt.</p>
+
+<nav class="toc">
+  <strong>Inhalt</strong>
+  <a href="#s-rolle">1. Server als Rolle</a>
+  <a href="#s-arch">2. Architektur: Lokal vs. NUC</a>
+  <a href="#s-sqlite">SQLite</a>
+  <a href="#s-oo">3. Das OO-Dreieck</a>
+  <a href="#s-proto">4. Protokolle</a>
+  <a href="#s-grenzen">5. Grenzen</a>
+  <a href="#s-glossar">6. Glossar</a>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<section id="s-rolle">
+<h2>1. Server ist eine Rolle, kein Ding</h2>
+
+<p>Das klingt banal, ist aber der Schlüssel zum Verständnis fast aller Netzwerkprobleme: Ein Programm ist nicht einfach „ein Server". Es ist ein Server <em>gegenüber diesem Aufrufer</em>, in diesem Moment. Dieselbe uvicorn-Instanz, die dem Browser antwortet, ist gleichzeitig ein <em>Client</em>, wenn sie Anfragen an den OO-Container weiterleitet.</p>
+
+<div class="role-demo">
+  <div class="role-box" style="background:#0d1621;border:1px solid var(--c-browser)">
+    <div class="name" style="color:var(--c-browser)">Browser</div>
+    <div style="color:var(--muted);font-size:.8rem">localhost / mkan.yourdomain.example</div>
+    <div class="roles">
+      <span class="role-badge rb-cl">Client</span>
+    </div>
+  </div>
+  <div style="color:var(--muted);font-size:1.5rem;display:flex;align-items:center">⇄</div>
+  <div class="role-box" style="background:#0a1f0d;border:1px solid var(--c-mkan)">
+    <div class="name" style="color:var(--c-mkan)">mkan (uvicorn)</div>
+    <div style="color:var(--muted);font-size:.8rem">:7879</div>
+    <div class="roles">
+      <span class="role-badge rb-sv">Server</span>
+      <span class="role-badge rb-cl">Client</span>
+    </div>
+  </div>
+  <div style="color:var(--muted);font-size:1.5rem;display:flex;align-items:center">⇄</div>
+  <div class="role-box" style="background:#1a1500;border:1px solid var(--c-oo)">
+    <div class="name" style="color:var(--c-oo)">OnlyOffice</div>
+    <div style="color:var(--muted);font-size:.8rem">Docker :8088</div>
+    <div class="roles">
+      <span class="role-badge rb-sv">Server</span>
+      <span class="role-badge rb-cl">Client</span>
+    </div>
+  </div>
+</div>
+
+<p>Das schafft ein Adressierungsproblem: Wenn OO eine Datei herunterladen oder einen Callback senden will, muss es <em>mkan als Server</em> ansprechen — aber von welcher Adresse aus? Und wie lautet diese Adresse aus OOs Perspektive? Das ist der Kern aller OO-Integrationsprobleme.</p>
+
+<div class="card info">
+  <strong>Grundregel:</strong> Bevor ein Dienst mit einem anderen spricht, muss er wissen: Welche Adresse hat das Gegenüber <em>aus meiner Netzwerkperspektive</em>? Die Antwort unterscheidet sich je nachdem, ob man im gleichen Container, im gleichen Docker-Netz, auf dem gleichen Host oder im Internet spricht.
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<section id="s-arch">
+<h2>2. Architektur: Lokal vs. NUC</h2>
+
+<div class="tabs" id="arch-tabs">
+  <button class="tab-btn active" data-tab="lokal">Lokal (Entwicklung)</button>
+  <button class="tab-btn" data-tab="nuc">NUC / Produktion</button>
+  <button class="tab-btn" data-tab="diff">Unterschiede</button>
+</div>
+
+<!-- TAB: LOKAL -->
+<div class="tab-panel active" id="tab-lokal">
+
+<div class="diag-wrap">
+<svg viewBox="0 0 860 390" id="svg-lokal">
+<defs>
+  <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L8,3 z" fill="#484f58"/>
+  </marker>
+  <marker id="arr-b" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L8,3 z" fill="var(--c-browser)"/>
+  </marker>
+  <marker id="arr-g" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L8,3 z" fill="var(--c-mkan)"/>
+  </marker>
+  <marker id="arr-o" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L8,3 z" fill="var(--c-oo)"/>
+  </marker>
+  <marker id="arr-r" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L8,3 z" fill="var(--c-err)"/>
+  </marker>
+</defs>
+
+<!-- Docker-Netz-Rahmen -->
+<rect x="540" y="60" width="300" height="175" rx="10"
+  fill="none" stroke="#1f6feb" stroke-width="1.5" stroke-dasharray="8,5" opacity=".5"/>
+<text x="555" y="84" font-size="11" fill="#1f6feb" opacity=".7" font-family="monospace">Docker-Netz (bridge)</text>
+
+<!-- Host-Rahmen -->
+<rect x="8" y="40" width="840" height="325" rx="12"
+  fill="none" stroke="#30363d" stroke-width="1" opacity=".5"/>
+<text x="22" y="58" font-size="11" fill="#484f58" font-family="monospace">Dein Rechner (localhost)</text>
+
+<!-- Browser -->
+<rect x="20" y="100" width="130" height="70" rx="8" fill="#0d1621" stroke="var(--c-browser)" stroke-width="1.5"/>
+<text x="85" y="126" text-anchor="middle" fill="var(--c-browser)" font-size="13" font-weight="700" font-family="sans-serif">Browser</text>
+<text x="85" y="144" text-anchor="middle" fill="#484f58" font-size="11" font-family="monospace">localhost:7879</text>
+<text x="85" y="160" text-anchor="middle" fill="#388bfd" font-size="10" font-family="monospace">+SW-Cache</text>
+
+<!-- mkan -->
+<rect x="300" y="100" width="170" height="70" rx="8" fill="#0a1f0d" stroke="var(--c-mkan)" stroke-width="1.5"/>
+<text x="385" y="126" text-anchor="middle" fill="var(--c-mkan)" font-size="13" font-weight="700" font-family="sans-serif">mkan (uvicorn)</text>
+<text x="385" y="144" text-anchor="middle" fill="#484f58" font-size="11" font-family="monospace">:7879 — FastAPI</text>
+<text x="385" y="160" text-anchor="middle" fill="#2ea043" font-size="10" font-family="monospace">Server + Client</text>
+
+<!-- OO -->
+<rect x="560" y="100" width="160" height="70" rx="8" fill="#1a1500" stroke="var(--c-oo)" stroke-width="1.5"/>
+<text x="640" y="126" text-anchor="middle" fill="var(--c-oo)" font-size="13" font-weight="700" font-family="sans-serif">OnlyOffice</text>
+<text x="640" y="144" text-anchor="middle" fill="#484f58" font-size="11" font-family="monospace">Docker :8088</text>
+<text x="640" y="160" text-anchor="middle" fill="#e3b341" font-size="10" font-family="monospace">Server + Client</text>
+
+<!-- Verbindung Browser ↔ mkan -->
+<!-- Request -->
+<line x1="150" y1="127" x2="298" y2="127" stroke="var(--c-browser)" stroke-width="1.5" marker-end="url(#arr-b)" opacity=".7"/>
+<text x="224" y="122" text-anchor="middle" fill="var(--c-browser)" font-size="10" font-family="monospace">HTTP GET/POST</text>
+<!-- Response -->
+<line x1="300" y1="145" x2="152" y2="145" stroke="var(--c-mkan)" stroke-width="1.5" marker-end="url(#arr-g)" opacity=".7"/>
+<text x="224" y="158" text-anchor="middle" fill="var(--c-mkan)" font-size="10" font-family="monospace">JSON / HTML</text>
+
+<!-- Verbindung mkan → OO (Proxy-Request) -->
+<line x1="470" y1="125" x2="558" y2="125" stroke="var(--c-mkan)" stroke-width="1.5" marker-end="url(#arr-g)" opacity=".7"/>
+<text x="514" y="119" text-anchor="middle" fill="var(--c-mkan)" font-size="10" font-family="monospace">HTTP Proxy</text>
+<text x="514" y="131" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">/oo/* /doc/*</text>
+<!-- Response zurück -->
+<line x1="560" y1="147" x2="472" y2="147" stroke="var(--c-oo)" stroke-width="1.5" marker-end="url(#arr-o)" opacity=".7"/>
+
+<!-- WebSocket-Label -->
+<text x="514" y="162" text-anchor="middle" fill="#e3b341" font-size="10" font-family="monospace">+ WebSocket</text>
+
+<!-- OO Callback → mkan (via host.docker.internal) -->
+<path id="cb-path-lokal" d="M 640,170 C 640,240 385,240 385,170"
+  fill="none" stroke="var(--c-oo)" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arr-o)" opacity=".8"/>
+<text x="512" y="236" text-anchor="middle" fill="#e3b341" font-size="10.5" font-family="monospace">Callback: host.docker.internal:7879</text>
+<text x="512" y="250" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">OO → mkan (Datei-Download + Save-Callback)</text>
+
+<!-- ── Datenpersistenz-Layer ── -->
+
+<!-- Trennlinie -->
+<line x1="20" y1="272" x2="840" y2="272" stroke="#30363d" stroke-width="1" stroke-dasharray="3,5" opacity=".4"/>
+<text x="30" y="286" font-size="10" fill="#484f58" font-family="monospace" opacity=".7">Persistenz-Schicht (Disk)</text>
+
+<!-- Browser: sessionStorage – nur JWT, kein Board-Inhalt -->
+<line x1="85" y1="170" x2="85" y2="290" stroke="#388bfd" stroke-width="1" stroke-dasharray="3,4" opacity=".35"/>
+<rect x="18" y="290" width="145" height="68" rx="6"
+  fill="#080d18" stroke="#1c3060" stroke-width="1" stroke-dasharray="5,3"/>
+<text x="90" y="309" text-anchor="middle" fill="#388bfd" font-size="10" font-weight="700" font-family="monospace">sessionStorage</text>
+<text x="90" y="325" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">JWT-Token</text>
+<text x="90" y="340" text-anchor="middle" fill="#30363d" font-size="9" font-family="monospace">kein Board-Inhalt</text>
+<text x="90" y="352" text-anchor="middle" fill="#484f58" font-size="9" font-family="monospace">(gelöscht beim Tab-Close)</text>
+
+<!-- mkan: SQLite + Uploads -->
+<line x1="385" y1="170" x2="385" y2="290" stroke="var(--c-mkan)" stroke-width="1" stroke-dasharray="3,4" opacity=".45"/>
+<rect x="285" y="290" width="205" height="68" rx="6"
+  fill="#060f08" stroke="#1a5e29" stroke-width="1" stroke-dasharray="5,3"/>
+<text x="387" y="309" text-anchor="middle" fill="#2ea043" font-size="11" font-weight="700" font-family="sans-serif">Datenpersistenz (Disk)</text>
+<text x="387" y="325" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">server/data/db/kanban.sqlite</text>
+<text x="387" y="340" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">server/data/uploads/</text>
+<text x="387" y="354" text-anchor="middle" fill="#1a7f37" font-size="9" font-family="monospace">&#128190; 220 KB + 14 Anhang-Dirs · survives restart</text>
+
+<!-- Hinweis: OO schreibt nicht direkt -->
+<text x="640" y="295" text-anchor="middle" fill="#484f58" font-size="9.5" font-family="monospace">OO schreibt nie direkt —</text>
+<text x="640" y="308" text-anchor="middle" fill="#484f58" font-size="9.5" font-family="monospace">Callback → mkan → Disk</text>
+
+<!-- animierte Pakete -->
+<circle class="packet" id="pk-bm" r="5" fill="var(--c-browser)">
+  <animateMotion id="am-bm" dur="1.5s" repeatCount="indefinite" begin="indefinite">
+    <mpath href="#path-bm"/>
+  </animateMotion>
+</circle>
+<path id="path-bm" d="M 150,130 L 300,130" fill="none" stroke="none"/>
+
+<circle class="packet" id="pk-mo" r="5" fill="var(--c-mkan)">
+  <animateMotion id="am-mo" dur="1.2s" repeatCount="indefinite" begin="indefinite">
+    <mpath href="#path-mo"/>
+  </animateMotion>
+</circle>
+<path id="path-mo" d="M 470,128 L 560,128" fill="none" stroke="none"/>
+
+<circle class="packet" id="pk-cb" r="5" fill="var(--c-oo)">
+  <animateMotion id="am-cb" dur="2s" repeatCount="indefinite" begin="indefinite">
+    <mpath href="#cb-path-lokal"/>
+  </animateMotion>
+</circle>
+
+</svg>
+</div>
+
+<div class="flow-controls">
+  <button class="ctrl-btn" id="btn-play-lokal" onclick="playLokal()">&#9654; Flows abspielen</button>
+  <button class="ctrl-btn" onclick="stopLokal()">&#9646;&#9646; Stop</button>
+</div>
+
+<div class="step-list" id="steps-lokal">
+  <div class="step" data-step="1" onclick="showStepLokal(1)">① Browser → mkan</div>
+  <div class="step" data-step="2" onclick="showStepLokal(2)">② mkan → OO (Proxy)</div>
+  <div class="step" data-step="3" onclick="showStepLokal(3)">③ WebSocket-Tunnel</div>
+  <div class="step" data-step="4" onclick="showStepLokal(4)">④ OO → mkan (Callback)</div>
+  <div class="step" data-step="5" onclick="showStepLokal(5)">⑤ Service Worker</div>
+</div>
+<div class="step-desc" id="desc-lokal">
+  Klick auf einen Schritt für Erläuterung.
+</div>
+
+</div><!-- /tab-lokal -->
+
+<!-- TAB: NUC -->
+<div class="tab-panel" id="tab-nuc">
+
+<div class="diag-wrap">
+<svg viewBox="0 0 860 400" id="svg-nuc">
+<defs>
+  <marker id="arr-n" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L8,3 z" fill="var(--c-nginx)"/>
+  </marker>
+</defs>
+
+<!-- Internet -->
+<rect x="8" y="10" width="130" height="55" rx="8"
+  fill="#0a0a14" stroke="#30363d" stroke-width="1"/>
+<text x="73" y="32" text-anchor="middle" fill="#484f58" font-size="12" font-weight="700" font-family="sans-serif">Browser</text>
+<text x="73" y="50" text-anchor="middle" fill="#388bfd" font-size="10" font-family="monospace">mkan.yourdomain.example</text>
+<text x="73" y="63" text-anchor="middle" fill="#388bfd" font-size="10" font-family="monospace">HTTPS :443</text>
+
+<!-- Internet-Wolke / Pfeil -->
+<line x1="138" y1="37" x2="218" y2="37" stroke="#30363d" stroke-width="1.5" stroke-dasharray="4,3"/>
+<text x="178" y="32" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">Internet</text>
+<text x="178" y="48" text-anchor="middle" fill="#1a7f37" font-size="9" font-family="monospace">TLS verschl.</text>
+
+<!-- NUC-Rahmen -->
+<rect x="180" y="5" width="670" height="385" rx="12"
+  fill="none" stroke="#30363d" stroke-width="1" opacity=".6"/>
+<text x="196" y="24" font-size="11" fill="#484f58" font-family="monospace">NUC (milnus) — Linux</text>
+
+<!-- nginx -->
+<rect x="210" y="15" width="150" height="65" rx="8" fill="#1a0d35" stroke="var(--c-nginx)" stroke-width="1.5"/>
+<text x="285" y="40" text-anchor="middle" fill="var(--c-nginx)" font-size="13" font-weight="700" font-family="sans-serif">nginx</text>
+<text x="285" y="56" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">reverse proxy</text>
+<text x="285" y="70" text-anchor="middle" fill="#bc8cff" font-size="10" font-family="monospace">TLS-Terminierung</text>
+
+<!-- Docker-Netz-Rahmen -->
+<rect x="200" y="105" width="640" height="240" rx="10"
+  fill="none" stroke="#1f6feb" stroke-width="1.5" stroke-dasharray="8,5" opacity=".5"/>
+<text x="216" y="125" font-size="11" fill="#1f6feb" opacity=".7" font-family="monospace">Docker-Netz: webproxy</text>
+
+<!-- mkan Docker -->
+<rect x="220" y="150" width="170" height="80" rx="8" fill="#0a1f0d" stroke="var(--c-mkan)" stroke-width="1.5"/>
+<text x="305" y="178" text-anchor="middle" fill="var(--c-mkan)" font-size="13" font-weight="700" font-family="sans-serif">mkan</text>
+<text x="305" y="196" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">Docker :7879</text>
+<text x="305" y="213" text-anchor="middle" fill="#2ea043" font-size="10" font-family="monospace">FastAPI + uvicorn</text>
+
+<!-- OO Docker -->
+<rect x="540" y="150" width="170" height="80" rx="8" fill="#1a1500" stroke="var(--c-oo)" stroke-width="1.5"/>
+<text x="625" y="178" text-anchor="middle" fill="var(--c-oo)" font-size="13" font-weight="700" font-family="sans-serif">OnlyOffice</text>
+<text x="625" y="196" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">Docker :80</text>
+<text x="625" y="213" text-anchor="middle" fill="#e3b341" font-size="10" font-family="monospace">DocServer</text>
+
+<!-- Trennlinie NUC -->
+<line x1="196" y1="278" x2="840" y2="278" stroke="#30363d" stroke-width="1" stroke-dasharray="3,5" opacity=".4"/>
+<text x="205" y="292" font-size="10" fill="#484f58" font-family="monospace" opacity=".7">Persistenz-Schicht (Host-Disk, außerhalb Docker)</text>
+
+<!-- Volume / Daten -->
+<line x1="305" y1="230" x2="305" y2="300" stroke="var(--c-mkan)" stroke-width="1" stroke-dasharray="3,4" opacity=".45"/>
+<rect x="215" y="300" width="205" height="75" rx="6" fill="#060f08" stroke="#1a5e29" stroke-width="1" stroke-dasharray="5,3"/>
+<text x="317" y="320" text-anchor="middle" fill="#2ea043" font-size="11" font-weight="700" font-family="sans-serif">Docker Volume</text>
+<text x="317" y="337" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">/mnt/mkan/db/kanban.sqlite</text>
+<text x="317" y="352" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">/mnt/mkan/uploads/</text>
+<text x="317" y="366" text-anchor="middle" fill="#1a7f37" font-size="9" font-family="monospace">&#128190; tägl. Backup via nextcloud-backup.sh</text>
+
+<!-- Hinweis: Browser hat nur JWT -->
+<rect x="450" y="300" width="200" height="60" rx="6" fill="#080d18" stroke="#1c3060" stroke-width="1" stroke-dasharray="5,3"/>
+<text x="550" y="320" text-anchor="middle" fill="#388bfd" font-size="10" font-weight="700" font-family="monospace">sessionStorage (Browser)</text>
+<text x="550" y="336" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">JWT-Token</text>
+<text x="550" y="351" text-anchor="middle" fill="#30363d" font-size="9" font-family="monospace">kein Board-Inhalt im Browser</text>
+
+<!-- HTTPS → nginx (von außen) -->
+<line x1="138" y1="40" x2="210" y2="40" stroke="var(--c-nginx)" stroke-width="1.5" marker-end="url(#arr-n)"/>
+
+<!-- nginx → mkan (intern HTTP) -->
+<line x1="285" y1="80" x2="285" y2="150" stroke="var(--c-nginx)" stroke-width="1.5" marker-end="url(#arr-n)" opacity=".7"/>
+<text x="297" y="120" font-size="10" fill="var(--c-nginx)" font-family="monospace">HTTP :7879</text>
+<text x="297" y="133" font-size="10" fill="#484f58" font-family="monospace">(intern)</text>
+
+<!-- mkan → OO (Proxy) -->
+<line x1="390" y1="178" x2="540" y2="178" stroke="var(--c-mkan)" stroke-width="1.5" marker-end="url(#arr-g)" opacity=".7"/>
+<text x="465" y="172" text-anchor="middle" fill="var(--c-mkan)" font-size="10" font-family="monospace">HTTP Proxy /oo/*</text>
+<line x1="540" y1="198" x2="390" y2="198" stroke="var(--c-oo)" stroke-width="1.5" marker-end="url(#arr-o)" opacity=".7"/>
+<text x="465" y="213" text-anchor="middle" fill="#e3b341" font-size="10" font-family="monospace">+ WebSocket</text>
+
+<!-- OO → mkan Callback (intern) -->
+<path id="cb-path-nuc" d="M 625,230 C 625,295 305,295 305,230"
+  fill="none" stroke="var(--c-oo)" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arr-o)" opacity=".8"/>
+<text x="465" y="302" text-anchor="middle" fill="#e3b341" font-size="10.5" font-family="monospace">Callback: http://mkan:7879/...</text>
+<text x="465" y="316" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">Service-Name im Docker-Netz (intern)</text>
+
+<!-- animierte Pakete NUC -->
+<circle class="packet" id="pk-nuc-nb" r="5" fill="var(--c-nginx)">
+  <animateMotion id="am-nuc-nb" dur="1.8s" repeatCount="indefinite" begin="indefinite">
+    <mpath href="#path-nuc-nb"/>
+  </animateMotion>
+</circle>
+<path id="path-nuc-nb" d="M 138,40 L 210,40 L 285,80 L 285,150" fill="none" stroke="none"/>
+
+<circle class="packet" id="pk-nuc-mo" r="5" fill="var(--c-mkan)">
+  <animateMotion id="am-nuc-mo" dur="1.2s" repeatCount="indefinite" begin="indefinite">
+    <mpath href="#path-nuc-mo"/>
+  </animateMotion>
+</circle>
+<path id="path-nuc-mo" d="M 390,178 L 540,178" fill="none" stroke="none"/>
+
+<circle class="packet" id="pk-nuc-cb" r="5" fill="var(--c-oo)">
+  <animateMotion id="am-nuc-cb" dur="2s" repeatCount="indefinite" begin="indefinite">
+    <mpath href="#cb-path-nuc"/>
+  </animateMotion>
+</circle>
+
+</svg>
+</div>
+
+<div class="flow-controls">
+  <button class="ctrl-btn" id="btn-play-nuc" onclick="playNuc()">&#9654; Flows abspielen</button>
+  <button class="ctrl-btn" onclick="stopNuc()">&#9646;&#9646; Stop</button>
+</div>
+
+<div class="step-list" id="steps-nuc">
+  <div class="step" data-step="1" onclick="showStepNuc(1)">① Browser → nginx (HTTPS)</div>
+  <div class="step" data-step="2" onclick="showStepNuc(2)">② nginx → mkan (HTTP intern)</div>
+  <div class="step" data-step="3" onclick="showStepNuc(3)">③ mkan → OO (Docker-intern)</div>
+  <div class="step" data-step="4" onclick="showStepNuc(4)">④ OO → mkan (Callback)</div>
+  <div class="step" data-step="5" onclick="showStepNuc(5)">⑤ Daten-Volume</div>
+</div>
+<div class="step-desc" id="desc-nuc">
+  Klick auf einen Schritt für Erläuterung.
+</div>
+
+</div><!-- /tab-nuc -->
+
+<!-- TAB: UNTERSCHIEDE -->
+<div class="tab-panel" id="tab-diff">
+<div class="cmp-grid">
+  <div class="cmp-col lokal">
+    <h4>Lokal (Entwicklung)</h4>
+    <div class="hrow ok"><span class="ico">&#10003;</span><span>Kein TLS nötig — Browser und Server auf demselben Rechner</span></div>
+    <div class="hrow ok"><span class="ico">&#10003;</span><span>uvicorn direkt mit <code>--reload</code> starten, sofortige Codeänderungen</span></div>
+    <div class="hrow warn"><span class="ico">&#9888;</span><span>OO-Container braucht <code>host.docker.internal:7879</code> statt <code>localhost</code> — Docker isoliert sein Netz</span></div>
+    <div class="hrow warn"><span class="ico">&#9888;</span><span>Service Worker cached aggressiv — nach HTML-Änderungen manuell löschen</span></div>
+    <div class="hrow bad"><span class="ico">&#10005;</span><span>OO-IP-Blocking: Docker blockiert standardmäßig private IPs in Callbacks → muss per <code>local.json</code> deaktiviert werden</span></div>
+    <div class="hrow bad"><span class="ico">&#10005;</span><span>Analytics.js: OO versucht Google Analytics zu laden, scheitert → mkan injiziert Stub in index.html</span></div>
+  </div>
+  <div class="cmp-col nuc">
+    <h4>NUC / Produktion</h4>
+    <div class="hrow ok"><span class="ico">&#10003;</span><span>TLS an nginx terminiert — beide Container kommunizieren intern unverschlüsselt (kurzer Weg, sicher)</span></div>
+    <div class="hrow ok"><span class="ico">&#10003;</span><span>OO und mkan im selben Docker-Netz → OO erreicht mkan über Service-Name <code>mkan</code></span></div>
+    <div class="hrow ok"><span class="ico">&#10003;</span><span>Kein IP-Blocking-Problem: Kommunikation bleibt innerhalb des Docker-Netzes</span></div>
+    <div class="hrow warn"><span class="ico">&#9888;</span><span>OO_MKAN_BASE muss auf die interne URL zeigen (<code>http://mkan:7879</code>), nicht auf die öffentliche Domain — sonst Umweg über nginx und unnötige TLS-Overhead</span></div>
+    <div class="hrow warn"><span class="ico">&#9888;</span><span>Deploy-Prozess: tar + scp + deploy-script — kein hot-reload, Service muss neu gestartet werden</span></div>
+    <div class="hrow bad"><span class="ico">&#10005;</span><span>OO JWT-Validierung: ab OO 7.x erwartet OO ein JWT in allen API-Requests — entweder <code>JWT_ENABLED=false</code> oder korrektes Secret</span></div>
+  </div>
+</div>
+</div><!-- /tab-diff -->
+
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<section id="s-sqlite">
+<h2>2.5 SQLite: eingebettete Datenbank</h2>
+
+<p>Eine klassische Datenbank hat einen eigenen Server-Prozess, der läuft — auch wenn keine Anwendung verbunden ist. Die Anwendung schickt SQL als Text über eine Verbindung, der DB-Server führt es aus und antwortet. Zwei Prozesse, eine Prozessgrenze dazwischen.</p>
+
+<p>SQLite dreht das um: Die gesamte Datenbanklogik — SQL-Parser, Transaktionsmanager, Speicherverwaltung — steckt als Bibliothek direkt im Anwendungsprozess. In Python ist das <code>import sqlite3</code>, die Bibliothek ist in die Standardbibliothek einkompiliert. Es gibt keinen DB-Prozess, keinen Daemon, keine Verbindung. Die Bibliothek greift direkt auf die Datei zu.</p>
+
+<div class="diag-wrap">
+<svg viewBox="0 0 860 335">
+<defs>
+  <marker id="arr-sq" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L8,3 z" fill="#484f58"/>
+  </marker>
+  <marker id="arr-sq-o" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L8,3 z" fill="var(--c-oo)"/>
+  </marker>
+</defs>
+
+<!-- Spaltenüberschriften -->
+<text x="210" y="20" text-anchor="middle" fill="#adbac7" font-size="12" font-weight="700" font-family="sans-serif">Klassische DB (z.B. PostgreSQL)</text>
+<text x="648" y="20" text-anchor="middle" fill="#adbac7" font-size="12" font-weight="700" font-family="sans-serif">SQLite — eingebettet</text>
+<line x1="430" y1="5" x2="430" y2="328" stroke="#30363d" stroke-width="1" opacity=".5"/>
+
+<!-- ── LINKS: klassische DB ── -->
+
+<!-- App-Prozess (links) -->
+<rect x="18" y="32" width="395" height="68" rx="8" fill="#0a1f0d" stroke="var(--c-mkan)" stroke-width="1.5"/>
+<text x="215" y="56" text-anchor="middle" fill="var(--c-mkan)" font-size="12" font-weight="700" font-family="sans-serif">Anwendungs-Prozess</text>
+<text x="215" y="73" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">uvicorn + FastAPI — schickt SQL als Text</text>
+<text x="215" y="88" text-anchor="middle" fill="#30363d" font-size="10" font-family="monospace">keine DB-Logik hier</text>
+
+<!-- Pfeil nach unten -->
+<line x1="215" y1="100" x2="215" y2="135" stroke="#484f58" stroke-width="1.5" marker-end="url(#arr-sq)"/>
+<text x="225" y="115" fill="#388bfd" font-size="10" font-family="monospace">TCP / Unix-Socket</text>
+<text x="225" y="128" fill="#484f58" font-size="9" font-family="monospace">Prozessgrenze</text>
+
+<!-- DB-Server-Prozess -->
+<rect x="18" y="135" width="395" height="100" rx="8" fill="#0d1621" stroke="var(--c-browser)" stroke-width="1.5"/>
+<text x="215" y="158" text-anchor="middle" fill="var(--c-browser)" font-size="12" font-weight="700" font-family="sans-serif">DB-Server-Prozess (eigener Daemon)</text>
+<text x="50" y="178" fill="#484f58" font-size="10" font-family="monospace">• SQL-Parser</text>
+<text x="50" y="193" fill="#484f58" font-size="10" font-family="monospace">• Transaktionsmanager</text>
+<text x="50" y="208" fill="#484f58" font-size="10" font-family="monospace">• Query-Optimizer</text>
+<text x="230" y="178" fill="#484f58" font-size="10" font-family="monospace">• Verbindungs-Pool</text>
+<text x="230" y="193" fill="#484f58" font-size="10" font-family="monospace">• Authentifizierung</text>
+<text x="230" y="208" fill="#484f58" font-size="10" font-family="monospace">• Netzwerk-Interface</text>
+<text x="215" y="226" text-anchor="middle" fill="#388bfd" font-size="9" font-family="monospace">läuft auch wenn die Anwendung aus ist</text>
+
+<!-- Pfeil DB → Datei -->
+<line x1="215" y1="235" x2="215" y2="260" stroke="#484f58" stroke-width="1.5" marker-end="url(#arr-sq)"/>
+<text x="225" y="252" fill="#484f58" font-size="9" font-family="monospace">OS File-I/O</text>
+
+<!-- Datenbankdateien -->
+<rect x="90" y="260" width="250" height="45" rx="6" fill="#0a0a14" stroke="#30363d" stroke-width="1" stroke-dasharray="5,3"/>
+<text x="215" y="282" text-anchor="middle" fill="#484f58" font-size="11" font-family="monospace">Datenbankdateien</text>
+<text x="215" y="297" text-anchor="middle" fill="#30363d" font-size="10" font-family="monospace">data/, WAL, Indexes …</text>
+
+<!-- ── RECHTS: SQLite ── -->
+
+<!-- Äußerer Rahmen: ein einzelner Prozess -->
+<rect x="443" y="32" width="405" height="228" rx="8" fill="#0a1f0d" stroke="var(--c-mkan)" stroke-width="2"/>
+<text x="645" y="55" text-anchor="middle" fill="var(--c-mkan)" font-size="12" font-weight="700" font-family="sans-serif">Anwendungs-Prozess (einziger)</text>
+<text x="645" y="71" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">uvicorn + FastAPI</text>
+
+<!-- SQLite-Bibliothek (eingebettet, innen) -->
+<rect x="458" y="85" width="375" height="148" rx="7" fill="#1a1500" stroke="var(--c-oo)" stroke-width="1.5"/>
+<text x="645" y="107" text-anchor="middle" fill="var(--c-oo)" font-size="12" font-weight="700" font-family="sans-serif">SQLite-Bibliothek (eingebettet)</text>
+<text x="645" y="123" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">import sqlite3  ←  Python stdlib, direkt einkompiliert</text>
+<text x="485" y="145" fill="#484f58" font-size="10" font-family="monospace">• SQL-Parser</text>
+<text x="485" y="160" fill="#484f58" font-size="10" font-family="monospace">• Transaktionsmanager</text>
+<text x="485" y="175" fill="#484f58" font-size="10" font-family="monospace">• Query-Optimizer</text>
+<text x="655" y="145" fill="#484f58" font-size="10" font-family="monospace">• WAL-Journal</text>
+<text x="655" y="160" fill="#484f58" font-size="10" font-family="monospace">• File-Locking</text>
+<text x="655" y="175" fill="#484f58" font-size="10" font-family="monospace">• B-Tree-Storage</text>
+<text x="645" y="202" text-anchor="middle" fill="#e3b341" font-size="10" font-family="monospace">kein separater Prozess — läuft IN uvicorn</text>
+<text x="645" y="216" text-anchor="middle" fill="#e3b341" font-size="10" font-family="monospace">startet und endet mit der Anwendung</text>
+
+<!-- Pfeil SQLite → Datei (direkt, kein Umweg) -->
+<line x1="645" y1="260" x2="645" y2="278" stroke="var(--c-oo)" stroke-width="1.5" marker-end="url(#arr-sq-o)"/>
+<text x="656" y="273" fill="var(--c-oo)" font-size="9" font-family="monospace">direkt, kein Umweg</text>
+
+<!-- SQLite-Datei -->
+<rect x="520" y="278" width="250" height="45" rx="6" fill="#1a1500" stroke="#9e6a03" stroke-width="1" stroke-dasharray="5,3"/>
+<text x="645" y="300" text-anchor="middle" fill="#e3b341" font-size="11" font-family="monospace">kanban.sqlite</text>
+<text x="645" y="315" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">eine Datei = komplette Datenbank</text>
+
+</svg>
+</div>
+
+<p>Die Serverrolle existiert vollständig — SQLite <em>zieht sie in den Prozess hinein</em>, statt sie auszulagern. Der Preis: kein zentraler Koordinator für viele gleichzeitige Schreibzugriffe (deshalb WAL-Mode). Der Gewinn: keine Infrastruktur, kein Setup, die Datenbank ist eine einzige portable Datei.</p>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<section id="s-oo">
+<h2>3. Das OnlyOffice-Dreieck</h2>
+
+<p>OO-Integration ist kein normales Client-Server-Verhältnis. Es sind drei Parteien, jede spielt abwechselnd beide Rollen — und jede braucht eine eigene Antwort auf die Frage: „Unter welcher Adresse ist das Gegenüber für mich erreichbar?"</p>
+
+<div class="diag-wrap">
+<svg viewBox="0 0 860 320">
+<defs>
+  <marker id="arr-tri-b" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L8,3 z" fill="var(--c-browser)"/>
+  </marker>
+  <marker id="arr-tri-g" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L8,3 z" fill="var(--c-mkan)"/>
+  </marker>
+  <marker id="arr-tri-o" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L8,3 z" fill="var(--c-oo)"/>
+  </marker>
+</defs>
+
+<!-- Browser (oben links) -->
+<rect x="30" y="40" width="140" height="65" rx="8" fill="#0d1621" stroke="var(--c-browser)" stroke-width="1.5"/>
+<text x="100" y="67" text-anchor="middle" fill="var(--c-browser)" font-size="13" font-weight="700" font-family="sans-serif">Browser</text>
+<text x="100" y="84" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">lädt OO-Editor-JS</text>
+<text x="100" y="98" text-anchor="middle" fill="#388bfd" font-size="10" font-family="monospace">→ verbindet sich mit OO</text>
+
+<!-- mkan (mitte) -->
+<rect x="330" y="130" width="200" height="80" rx="8" fill="#0a1f0d" stroke="var(--c-mkan)" stroke-width="2"/>
+<text x="430" y="158" text-anchor="middle" fill="var(--c-mkan)" font-size="14" font-weight="700" font-family="sans-serif">mkan (Schaltzentrale)</text>
+<text x="430" y="175" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">Proxy + Auth + Callback-Empfang</text>
+<text x="430" y="190" text-anchor="middle" fill="#2ea043" font-size="10" font-family="monospace">kennt Datei-Pfad + Board-Zugehörigkeit</text>
+
+<!-- OO (oben rechts) -->
+<rect x="680" y="40" width="150" height="65" rx="8" fill="#1a1500" stroke="var(--c-oo)" stroke-width="1.5"/>
+<text x="755" y="67" text-anchor="middle" fill="var(--c-oo)" font-size="13" font-weight="700" font-family="sans-serif">OnlyOffice</text>
+<text x="755" y="84" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace">Editor-Engine</text>
+<text x="755" y="98" text-anchor="middle" fill="#e3b341" font-size="10" font-family="monospace">→ braucht Datei-URL</text>
+
+<!-- ① Browser → mkan: OO-Config anfordern -->
+<line x1="170" y1="60" x2="330" y2="145" stroke="var(--c-browser)" stroke-width="1.5" marker-end="url(#arr-tri-b)" opacity=".8"/>
+<text x="230" y="100" text-anchor="middle" fill="var(--c-browser)" font-size="11" font-family="monospace" transform="rotate(-28,230,100)">① GET /oo-config</text>
+
+<!-- ② mkan → Browser: Config mit URL+Key -->
+<line x1="332" y1="135" x2="172" y2="68" stroke="var(--c-mkan)" stroke-width="1.5" marker-end="url(#arr-tri-g)" opacity=".6" stroke-dasharray="5,3"/>
+<text x="200" y="78" text-anchor="middle" fill="var(--c-mkan)" font-size="10" font-family="monospace" transform="rotate(-28,200,78)">② Config-JSON</text>
+
+<!-- ③ Browser → OO (via Proxy durch mkan) -->
+<line x1="170" y1="65" x2="678" y2="65" stroke="var(--c-browser)" stroke-width="1.5" marker-end="url(#arr-tri-b)" opacity=".7" stroke-dasharray="5,3"/>
+<text x="424" y="55" text-anchor="middle" fill="var(--c-browser)" font-size="10" font-family="monospace">③ Browser lädt OO-JS via /oo/* (Proxy)</text>
+
+<!-- ④ OO → mkan: Datei herunterladen -->
+<line x1="680" y1="90" x2="530" y2="135" stroke="var(--c-oo)" stroke-width="1.5" marker-end="url(#arr-tri-o)" opacity=".8"/>
+<text x="623" y="123" text-anchor="middle" fill="var(--c-oo)" font-size="11" font-family="monospace" transform="rotate(30,623,123)">④ GET /oo-download</text>
+<text x="616" y="138" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace" transform="rotate(30,616,138)">(OO holt Datei)</text>
+
+<!-- ⑤ OO → mkan: Callback beim Speichern -->
+<line x1="682" y1="100" x2="532" y2="195" stroke="var(--c-oo)" stroke-width="1.8" marker-end="url(#arr-tri-o)" opacity=".9" stroke-dasharray="3,2"/>
+<text x="645" y="178" text-anchor="middle" fill="#e3b341" font-size="11" font-family="monospace" transform="rotate(55,645,178)">⑤ POST /callback</text>
+<text x="656" y="194" text-anchor="middle" fill="#484f58" font-size="10" font-family="monospace" transform="rotate(55,656,194)">(Datei-URL)</text>
+
+<!-- Browser ↔ OO: WebSocket (Echtzeit) -->
+<path d="M 170,72 C 330,20 580,20 678,68" fill="none" stroke="#e3b341" stroke-width="1.5" stroke-dasharray="4,3" opacity=".6" marker-end="url(#arr-tri-o)"/>
+<text x="424" y="16" text-anchor="middle" fill="#e3b341" font-size="10" font-family="monospace">⑥ WebSocket (via /doc/* Proxy) — Kollaboration in Echtzeit</text>
+
+<!-- Legende -->
+<rect x="30" y="265" width="800" height="45" rx="6" fill="var(--surf)" stroke="var(--border)" stroke-width="1"/>
+<text x="50" y="285" fill="#484f58" font-size="11" font-family="monospace">Das Problem:</text>
+<text x="135" y="285" fill="#e3b341" font-size="11" font-family="monospace">OO (④⑤) ruft mkan als Client auf.</text>
+<text x="380" y="285" fill="#484f58" font-size="11" font-family="monospace">mkan muss unter einer Adresse erreichbar sein,</text>
+<text x="50" y="302" fill="#f85149" font-size="11" font-family="monospace">die OO aus seinem Netzwerk kennt — nicht aus dem Netz des Browsers.</text>
+</svg>
+</div>
+
+<h3>Warum das lokal schwieriger ist als auf dem NUC</h3>
+
+<div class="card warn">
+  <strong>Das Docker-Netz-Problem (lokal):</strong> OO läuft in einem Docker-Container. Wenn OO <code>localhost:7879</code> aufruft, meint es <em>seinen eigenen</em> localhost — nicht den des Host-Rechners. Docker-Container haben ihr eigenes virtuelles Netzwerk-Interface.<br><br>
+  Lösung: Docker stellt den Hostname <code>host.docker.internal</code> bereit, der auf das Gateway zum Host zeigt. Deshalb: <code>OO_MKAN_BASE=http://host.docker.internal:7879</code>.
+</div>
+
+<div class="card ok">
+  <strong>Auf dem NUC ist es einfacher:</strong> Beide Container (mkan + OO) sind im gleichen Docker-Netz (<code>webproxy</code>). Container können sich direkt über ihren Service-Namen ansprechen: OO ruft <code>http://mkan:7879/...</code> auf. Kein Magic-Hostname nötig.
+</div>
+
+<div class="card err">
+  <strong>Das IP-Blocking-Problem (lokal):</strong> OO blockiert standardmäßig Requests an private IP-Adressen (10.x, 172.x, 192.168.x) — aus Sicherheitsgründen, damit OO nicht als SSRF-Vehikel missbraucht werden kann. <code>host.docker.internal</code> löst auf eine solche private IP auf → Callback schlägt fehl.<br><br>
+  Lösung: <code>local.json</code> in OO mit <code>allowPrivateIPAddress: true</code> überschreiben. Nur lokal nötig.
+</div>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<section id="s-proto">
+<h2>4. Protokollbesonderheiten</h2>
+
+<div class="proto-grid">
+  <div class="proto-card">
+    <h4><span class="tag t-http">HTTP</span> Einfache Requests</h4>
+    <p style="font-size:.88rem;color:#adbac7">Request → Response, dann fertig. Zustandslos. Jede API-Anfrage trägt JWT im Header. Funktioniert problemlos durch nginx und Docker-Proxies.</p>
+    <div class="hrow ok" style="margin-top:.5rem"><span class="ico">&#10003;</span><span style="font-size:.82rem">Standardmäßig überall erlaubt, gut loggbar</span></div>
+  </div>
+  <div class="proto-card">
+    <h4><span class="tag t-ws">WebSocket</span> OO-Kollaboration</h4>
+    <p style="font-size:.88rem;color:#adbac7">Dauerhaft offene bidirektionale Verbindung. OO braucht das für Echtzeit-Mitarbeit (Co-Authoring). mkan tunnelt WS via <code>websockets</code>-Library.</p>
+    <div class="hrow warn" style="margin-top:.5rem"><span class="ico">&#9888;</span><span style="font-size:.82rem">nginx muss WS-Upgrade erlauben (<code>proxy_http_version 1.1</code>, <code>Upgrade</code>-Header)</span></div>
+  </div>
+  <div class="proto-card">
+    <h4><span class="tag t-cors">CORS</span> Same-Origin-Policy</h4>
+    <p style="font-size:.88rem;color:#adbac7">Browser verweigert Requests zu anderen Origins (Schema + Host + Port). OO-JS läuft auf <code>localhost:7879</code> (via Proxy), darf keine direkten Requests zu <code>localhost:8088</code> machen.</p>
+    <div class="hrow ok" style="margin-top:.5rem"><span class="ico">&#10003;</span><span style="font-size:.82rem">Proxy löst das: alles läuft über <code>/oo/*</code> auf Port 7879</span></div>
+    <div class="hrow bad"><span class="ico">&#10005;</span><span style="font-size:.82rem">Analytics.js: OO lädt von CDN — separater Origin → geblockt → Stub nötig</span></div>
+  </div>
+  <div class="proto-card">
+    <h4><span class="tag t-tls">TLS</span> Verschlüsselung</h4>
+    <p style="font-size:.88rem;color:#adbac7">HTTPS ist an nginx terminiert. mkan und OO sprechen intern HTTP. Kein Problem solange beides im geschlossenen Docker-Netz bleibt.</p>
+    <div class="hrow warn" style="margin-top:.5rem"><span class="ico">&#9888;</span><span style="font-size:.82rem">Lokal: kein TLS. Kein Problem — aber Service Worker auf HTTPS-Sites sind strenger</span></div>
+  </div>
+  <div class="proto-card">
+    <h4><span class="tag t-jwt">JWT</span> Zwei Ebenen</h4>
+    <p style="font-size:.88rem;color:#adbac7">mkan nutzt JWT für eigene Auth (sessionStorage). OO hat eigenes JWT-System für seine interne API-Absicherung. Beides getrennt.</p>
+    <div class="hrow warn" style="margin-top:.5rem"><span class="ico">&#9888;</span><span style="font-size:.82rem">OO 7.x+: <code>JWT_ENABLED=false</code> zum Deaktivieren oder eigenes Secret konfigurieren</span></div>
+  </div>
+  <div class="proto-card">
+    <h4>Service Worker / Cache</h4>
+    <p style="font-size:.88rem;color:#adbac7">Browser-Seite kann sich selbst cachen. Nach Deploy-Änderungen wird die alte <code>index.html</code> aus dem Cache geliefert — OO-Code-Änderungen wirken erst nach SW-Löschung.</p>
+    <div class="hrow bad" style="margin-top:.5rem"><span class="ico">&#10005;</span><span style="font-size:.82rem">Lokal besonders schmerzhaft: F12 → Anwendung → SW → Registrierung aufheben</span></div>
+  </div>
+</div>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<section id="s-grenzen">
+<h2>5. Grenzen: technisch vs. konfigurationsbedingt</h2>
+
+<p>Nicht alle Probleme haben dieselbe Ursache — und nicht alle lassen sich genauso lösen. Eine technische Grenze ist in der Protokoll-Spezifikation oder Hardware begründet; eine konfigurationsbedingte ist ein gesetzter Default, den man ändern kann.</p>
+
+<table class="limits-table">
+<thead>
+<tr>
+  <th>Problem</th>
+  <th>Art</th>
+  <th>Lokal</th>
+  <th>NUC / Prod</th>
+  <th>Lösung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>OO kann <code>localhost:7879</code> nicht erreichen</td>
+  <td class="cat">technisch<br>(Netz-Isolation)</td>
+  <td class="conf">host.docker.internal</td>
+  <td class="fix">Service-Name im Netz</td>
+  <td><code>OO_MKAN_BASE</code> setzen</td>
+</tr>
+<tr>
+  <td>OO blockiert private IPs</td>
+  <td class="cat">konfigurationsbedingt<br>(OO-Default)</td>
+  <td class="hard">Blockiert Callbacks</td>
+  <td class="fix">Kein Problem (intern)</td>
+  <td><code>local.json</code> überschreiben</td>
+</tr>
+<tr>
+  <td>Analytics.js CORS-Fehler</td>
+  <td class="cat">technisch<br>(Browser Same-Origin)</td>
+  <td class="hard">Fehler in Console</td>
+  <td class="hard">Gleich</td>
+  <td>Stub in <code>index.html</code> injizieren</td>
+</tr>
+<tr>
+  <td>WebSocket durch nginx</td>
+  <td class="cat">konfigurationsbedingt<br>(nginx-Default)</td>
+  <td class="fix">Kein nginx lokal</td>
+  <td class="conf">Muss konfiguriert sein</td>
+  <td><code>Upgrade</code>-Header + HTTP/1.1</td>
+</tr>
+<tr>
+  <td>OO JWT-Validierung</td>
+  <td class="cat">konfigurationsbedingt<br>(OO-Default ab v7)</td>
+  <td class="conf">JWT_ENABLED=false</td>
+  <td class="conf">JWT_ENABLED=false</td>
+  <td>Env-Var beim Container-Start</td>
+</tr>
+<tr>
+  <td>Service Worker cached alte HTML</td>
+  <td class="cat">technisch<br>(Browser-Cache-API)</td>
+  <td class="hard">Manuell löschen</td>
+  <td class="conf">Cache-Busting im SW</td>
+  <td>SW-Version hochsetzen oder manuell</td>
+</tr>
+<tr>
+  <td>Datei-URL für OO-Download</td>
+  <td class="cat">design-bedingt</td>
+  <td class="conf">Ohne Auth (kein JWT)</td>
+  <td class="conf">Gleich</td>
+  <td>Endpunkt ohne Auth-Pflicht (korrekt)</td>
+</tr>
+<tr>
+  <td>Cover-Images brauchen Auth</td>
+  <td class="cat">technisch<br>(<code>&lt;img src&gt;</code> kein Header)</td>
+  <td class="conf">?token=TOKEN</td>
+  <td class="conf">Gleich</td>
+  <td>Token als Query-Param</td>
+</tr>
+</tbody>
+</table>
+
+<div class="card info" style="margin-top:1.5rem">
+  <strong>Faustregel:</strong> Wenn ein Problem <em>nur lokal</em> auftritt und auf dem NUC nicht — ist es meistens eine Netzwerkadressierungs- oder Docker-Isolation-Frage (<em>technisch, nicht vermeidbar</em>). Wenn es auf beiden Umgebungen auftritt aber anders konfiguriert sein muss — ist es ein Default-Setting eines Dienstes (<em>konfigurationsbedingt, immer lösbar</em>).
+</div>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<section id="s-glossar">
+<h2>Glossar</h2>
+<p>Fachbegriffe im Text sind mit einer <span class="term" style="cursor:default;pointer-events:none">gestrichelten Linie</span> markiert — Hover für Kurzinfo. Oder hier nachschlagen und filtern:</p>
+<input type="text" id="glossar-search" placeholder="Begriff suchen …" oninput="filterGlossar(this.value)" autocomplete="off" spellcheck="false">
+<div class="g-grid" id="g-grid"></div>
+</section>
+
+<script>
+// ── Tabs ──────────────────────────────────────────────────
+document.querySelectorAll('#arch-tabs .tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.tab;
+    document.querySelectorAll('#arch-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + target).classList.add('active');
+  });
+});
+
+// ── Step descriptions ─────────────────────────────────────
+const stepsLokal = {
+  1: '<strong>① Browser → mkan (HTTP)</strong> <span class="proto tag t-http">HTTP</span> Der Browser ruft <code>localhost:7879</code> auf — direkt, kein Umweg. mkan antwortet mit HTML/JSON. JWT liegt im sessionStorage, wird bei jedem API-Call als Bearer-Token mitgeschickt.',
+  2: '<strong>② mkan → OO (HTTP-Proxy)</strong> <span class="proto tag t-http">HTTP</span> Wenn der Browser <code>/oo/*</code> aufruft, leitet mkan (<code>oo_proxy.py</code>) den Request an OO weiter — als HTTP-Client. OO antwortet, mkan reicht weiter. Browser sieht nur eine Origin: <code>localhost:7879</code>.',
+  3: '<strong>③ WebSocket-Tunnel</strong> <span class="proto tag t-ws">WebSocket</span> OO-Echtzeit läuft über <code>/doc/*</code>. mkan accepted die WS-Verbindung vom Browser, öffnet gleichzeitig eine WS-Verbindung zu OO, und leitet Frames in beide Richtungen weiter. Zwei WS-Verbindungen für eine.',
+  4: '<strong>④ OO → mkan (Callback)</strong> <span class="proto tag t-http">HTTP</span> Wenn Nutzer im OO-Editor speichert, sendet OO einen POST an die Callback-URL. Diese URL zeigt auf <code>host.docker.internal:7879</code> — weil OO im Docker-Container sitzt und <code>localhost</code> sein eigenes Interface meint, nicht den Host. mkan empfängt, lädt die neue Datei, schreibt auf Disk.',
+  5: '<strong>⑤ Service Worker</strong> Der Browser-SW cached die gesamte <code>index.html</code> aggressiv. Nach einem Deploy mit geändertem OO-Code liefert der SW die alte Version — OO-Editor startet gar nicht richtig. Lösung: F12 → Anwendung → Service Workers → Registrierung aufheben → F5.'
+};
+const stepsNuc = {
+  1: '<strong>① Browser → nginx (HTTPS)</strong> <span class="proto tag t-tls">TLS</span> Anfragen gehen an <code>mkan.yourdomain.example:443</code>. nginx terminiert TLS, prüft das Zertifikat. Hinter nginx läuft alles unverschlüsselt — legitim, weil im geschlossenen Docker-Netz.',
+  2: '<strong>② nginx → mkan (HTTP intern)</strong> <span class="proto tag t-http">HTTP</span> nginx proxied zu <code>mkan:7879</code> — dem Service-Namen im Docker-Netz. Kein Hostname-Auflösungsproblem: Docker-DNS macht das automatisch.',
+  3: '<strong>③ mkan → OO (Docker-intern)</strong> <span class="proto tag t-http">HTTP</span> <span class="proto tag t-ws">WS</span> mkan proxied an OO. Da beide Container im gleichen <code>webproxy</code>-Netz sind, kommunizieren sie direkt — ohne nginx-Umweg, ohne TLS-Overhead.',
+  4: '<strong>④ OO → mkan (interner Callback)</strong> <span class="proto tag t-http">HTTP</span> OO ruft <code>http://mkan:7879/attachments/{id}/onlyoffice-callback</code> auf. Service-Name funktioniert, keine private-IP-Blocking-Problematik, weil beide im selben Docker-Netz kommunizieren.',
+  5: '<strong>⑤ Daten-Volume</strong> SQLite-DB und Uploads liegen in <code>/mnt/mkan/</code> auf dem NUC-Host — als Docker-Volume eingehängt. Persistenz überlebt Container-Neustarts und Deploys.'
+};
+
+function showStepLokal(n) {
+  document.querySelectorAll('#steps-lokal .step').forEach(s => s.classList.remove('active'));
+  const el = document.querySelector('#steps-lokal [data-step="'+n+'"]');
+  if (el) el.classList.add('active');
+  document.getElementById('desc-lokal').innerHTML = stepsLokal[n] || '';
+}
+function showStepNuc(n) {
+  document.querySelectorAll('#steps-nuc .step').forEach(s => s.classList.remove('active'));
+  const el = document.querySelector('#steps-nuc [data-step="'+n+'"]');
+  if (el) el.classList.add('active');
+  document.getElementById('desc-nuc').innerHTML = stepsNuc[n] || '';
+}
+
+// ── Packet animations ─────────────────────────────────────
+let lokalPlaying = false, nucPlaying = false;
+let lokalTimer = null, nucTimer = null;
+
+function startPacket(circleId) {
+  const c = document.getElementById(circleId);
+  if (!c) return;
+  c.classList.add('visible');
+  const anim = c.querySelector('animateMotion');
+  if (anim) { try { anim.beginElement(); } catch(e) {} }
+}
+function stopPacket(circleId) {
+  const c = document.getElementById(circleId);
+  if (!c) return;
+  c.classList.remove('visible');
+  const anim = c.querySelector('animateMotion');
+  if (anim) { try { anim.endElement(); } catch(e) {} }
+}
+
+function playLokal() {
+  if (lokalPlaying) { stopLokal(); return; }
+  lokalPlaying = true;
+  const btn = document.getElementById('btn-play-lokal');
+  btn.classList.add('playing');
+  btn.textContent = '⏸ Pause';
+  ['pk-bm','pk-mo','pk-cb'].forEach(startPacket);
+  let step = 0;
+  const steps = [1,2,3,4];
+  function tick() {
+    showStepLokal(steps[step % steps.length]);
+    step++;
+    lokalTimer = setTimeout(tick, 2200);
+  }
+  tick();
+}
+function stopLokal() {
+  lokalPlaying = false;
+  clearTimeout(lokalTimer);
+  const btn = document.getElementById('btn-play-lokal');
+  btn.classList.remove('playing');
+  btn.textContent = '▶ Flows abspielen';
+  ['pk-bm','pk-mo','pk-cb'].forEach(stopPacket);
+  document.querySelectorAll('#steps-lokal .step').forEach(s => s.classList.remove('active'));
+  document.getElementById('desc-lokal').textContent = 'Klick auf einen Schritt für Erläuterung.';
+}
+
+function playNuc() {
+  if (nucPlaying) { stopNuc(); return; }
+  nucPlaying = true;
+  const btn = document.getElementById('btn-play-nuc');
+  btn.classList.add('playing');
+  btn.textContent = '⏸ Pause';
+  ['pk-nuc-nb','pk-nuc-mo','pk-nuc-cb'].forEach(startPacket);
+  let step = 0;
+  const steps = [1,2,3,4];
+  function tick() {
+    showStepNuc(steps[step % steps.length]);
+    step++;
+    nucTimer = setTimeout(tick, 2200);
+  }
+  tick();
+}
+function stopNuc() {
+  nucPlaying = false;
+  clearTimeout(nucTimer);
+  const btn = document.getElementById('btn-play-nuc');
+  btn.classList.remove('playing');
+  btn.textContent = '▶ Flows abspielen';
+  ['pk-nuc-nb','pk-nuc-mo','pk-nuc-cb'].forEach(stopPacket);
+  document.querySelectorAll('#steps-nuc .step').forEach(s => s.classList.remove('active'));
+  document.getElementById('desc-nuc').textContent = 'Klick auf einen Schritt für Erläuterung.';
+}
+
+// ── Glossar ───────────────────────────────────────────────
+const GLOSSARY = {
+  'uvicorn':       {s:'ASGI-Server für Python',           d:'Startet FastAPI-Apps und verwaltet HTTP-Verbindungen. Vergleichbar mit Apache/nginx, aber für Python-async-Code.'},
+  'FastAPI':       {s:'Python-Web-Framework',             d:'Nutzt Type-Hints für automatische Validierung und generiert API-Dokumentation. Hier das komplette mkan-Backend.'},
+  'ASGI':          {s:'Async Server Gateway Interface',   d:'Python-Standard für async Web-Apps — definiert die Schnittstelle zwischen uvicorn (Server) und FastAPI (App).'},
+  'SQLite':        {s:'Eingebettete Datenbank',            d:'Datenbankengine als Bibliothek direkt im Anwendungsprozess — kein separater DB-Server. Die gesamte DB-Logik (Parser, Transaktionsmanager, Storage) läuft in uvicorn mit. Die Daten liegen in einer einzigen Datei.'},
+  'Embedded-Datenbank':{s:'DB ohne eigenen Server-Prozess', d:'Im Gegensatz zu PostgreSQL/MySQL läuft keine eigene DB-Instanz. Die Engine ist als Bibliothek in die Anwendung eingebettet und teilt deren Prozess. Startet und endet mit der Anwendung.'},
+  'Daemon':        {s:'Hintergrundprozess',               d:'Prozess, der dauerhaft im Hintergrund läuft — unabhängig davon, ob eine Anwendung verbunden ist. PostgreSQL, MySQL, nginx sind Daemons. SQLite ist keiner: es gibt keinen DB-Daemon, nur die Bibliothek.'},
+  'Prozessgrenze': {s:'Grenze zwischen zwei Prozessen',   d:'Zwei Prozesse teilen keinen Speicher. Kommunikation erfordert explizite Kanäle: TCP-Verbindung, Unix-Socket, Pipes. Klassische DBs sitzen hinter einer Prozessgrenze — SQLite nicht.'},
+  'B-Tree':        {s:'Baum-Datenstruktur für Datenbanken',d:'Sortierte Baumstruktur, die SQLite intern für Tabellen und Indexes verwendet. Ermöglicht schnelle Suche (O log n) und effizientes sequentielles Lesen. Die .sqlite-Datei besteht im Kern aus B-Tree-Seiten.'},
+  'WAL-Mode':      {s:'Write-Ahead Logging',              d:'SQLite-Modus: Schreibvorgänge landen erst im Journal (WAL-Datei), dann committet. Erlaubt parallele Lesezugriffe während geschrieben wird — wichtig für async FastAPI mit mehreren gleichzeitigen Requests.'},
+  'Docker':        {s:'Container-Plattform',              d:'Packt App + Abhängigkeiten in ein isoliertes Image. Läuft überall identisch — Entwicklungs-Laptop wie NUC.'},
+  'Container':     {s:'Laufende Docker-Instanz',          d:'Isoliertes Laufzeit-Abbild eines Images. Eigenes Dateisystem, eigenes Netzwerk-Interface — getrennt vom Host und anderen Containern.'},
+  'Volume':        {s:'Docker-Persistenz-Speicher',       d:'Überdauert Container-Neustarts und Updates. SQLite-DB und Uploads liegen im Volume — auf dem NUC unter /mnt/mkan/.'},
+  'nginx':         {s:'Webserver & Reverse Proxy',        d:'Nimmt externe HTTPS-Anfragen entgegen, terminiert TLS und leitet intern als HTTP weiter. Browser spricht nie direkt mit mkan.'},
+  'Reverse Proxy': {s:'Netzwerk-Vermittler',              d:'Nimmt Anfragen von außen an und leitet sie an interne Dienste weiter. Versteckt Infrastruktur, ermöglicht TLS-Terminierung und Load Balancing.'},
+  'TLS-Terminierung':{s:'TLS endet am Proxy',            d:'nginx entschlüsselt den Browser-Traffic; dahinter HTTP, weil das Docker-Netz vertrauenswürdig ist. Spart TLS-Overhead im internen Netz.'},
+  'HTTP':          {s:'Hypertext Transfer Protocol',      d:'Grundprotokoll des Webs. Request → Response → fertig. Zustandslos: jeder Request trägt Authentifizierung selbst (hier: JWT im Header).'},
+  'HTTPS':         {s:'HTTP + TLS-Verschlüsselung',       d:'Browser und Server einigen sich auf Schlüssel — Inhalt für Dritte unleserlich. Das Zertifikat beweist die Serveridentität.'},
+  'WebSocket':     {s:'Dauerhafte Verbindung (bidirektional)', d:'Offener Kanal statt Request-Response. OO nutzt ihn für Echtzeit-Kollaboration. mkan tunnelt WS-Frames vom Browser zu OO und zurück.'},
+  'TLS':           {s:'Transport Layer Security',         d:'Verschlüsselungsprotokoll (Nachfolger von SSL). In mkan: an nginx terminiert — dahinter unverschlüsseltes HTTP im Docker-Netz.'},
+  'SSL':           {s:'Vorgänger von TLS',                d:'Heute fast überall durch TLS ersetzt. "SSL-Zertifikat" im Alltag meint technisch meist TLS. Nicht mehr empfohlen.'},
+  'CORS':          {s:'Cross-Origin Resource Sharing',    d:'Browser-Mechanismus: JS darf nur Requests an dieselbe Origin senden (gleicher Host+Port+Schema) — es sei denn, der Server erlaubt explizit andere Origins.'},
+  'JWT':           {s:'JSON Web Token',                   d:'Signiertes Token mit Nutzerdaten (user_id, Ablaufzeit). Kein Server-Session-Speicher nötig — Signatur beweist Echtheit. Hier im sessionStorage des Browsers.'},
+  'SSE':           {s:'Server-Sent Events',               d:'Unidirektionaler Push-Kanal: Server schickt Events, Client empfängt nur. Einfacher als WebSocket. mkan nutzt SSE für Live-Board-Updates.'},
+  'Proxy':         {s:'Anfragen-Vermittler',              d:'Leitet Requests weiter. Browser ruft /oo/* auf mkan auf — mkan leitet transparent an OO weiter. Browser sieht nur eine Origin.'},
+  'Callback':      {s:'Rückruf-URL',                      d:'URL, die OO aufruft, wenn Nutzer speichern. OO agiert als Client, mkan als Server. OO meldet Download-URL, mkan holt Datei und schreibt auf Disk.'},
+  'Service Worker':{s:'Browser-Cache-Proxy',              d:'JS-Skript im Hintergrund, das Netzwerk-Requests abfangen und aus Cache bedienen kann. Lokal: muss nach HTML-Änderungen manuell deregistriert werden.'},
+  'Same-Origin-Policy':{s:'Browser-Sicherheitsregel',    d:'JS darf nur Requests zur eigenen Origin senden (Schema + Host + Port). Verhindert, dass fremde Seiten im Namen des Nutzers API-Calls absetzen.'},
+  'SSRF':          {s:'Server-Side Request Forgery',      d:'Angriff: Bringt einen Server dazu, Requests an interne Ressourcen zu schicken (z.B. Cloud-Metadaten-APIs). OO blockt deshalb Callbacks an private IPs.'},
+  'Co-Authoring':  {s:'Gleichzeitige Dokumentbearbeitung',d:'Mehrere Nutzer bearbeiten dasselbe Dokument in Echtzeit. OO synchronisiert Änderungen sofort über WebSocket zwischen allen verbundenen Clients.'},
+  'CDN':           {s:'Content Delivery Network',         d:'Verteiltes Server-Netz für statische Dateien, nah am Nutzer. OO versucht Analytics-JS von CDN zu laden — scheitert in isolierten Setups → mkan injiziert Stub.'},
+  'host.docker.internal':{s:'Docker-Hostname für den Host-Rechner', d:'Zeigt aus dem Container auf die IP des Host-Rechners. Nötig weil "localhost" im Container nur das eigene virtuelle Interface meint.'},
+  'Bearer-Token':  {s:'HTTP-Auth-Token',                  d:'"Authorization: Bearer <jwt>". Wer das Token hat, darf zugreifen. mkan prüft bei jedem API-Request die Signatur.'},
+  'sessionStorage':{s:'Browser-Tab-Speicher',             d:'Lebt nur für die Dauer des Tab. Beim Schließen gelöscht, nicht zwischen Tabs geteilt. mkan speichert JWT hier — bewusste Entscheidung gegen localStorage.'},
+  'webproxy':      {s:'Docker-Netz auf dem NUC',          d:'Virtuelles Netzwerk, in dem alle Web-Dienste (mkan, OO, …) hängen. Container können sich per Service-Name ansprechen, ohne nach außen sichtbar zu sein.'},
+  'IP-Blocking':   {s:'OO-Schutz gegen SSRF',            d:'OO blockiert Callbacks an private IPs (10.x, 172.x, 192.168.x) — damit OO nicht als SSRF-Vehikel missbraucht werden kann. Lokal problematisch.'},
+  'OO_MKAN_BASE':  {s:'Env-Variable: URL von mkan für OO',d:'Teilt OO mit, unter welcher Adresse mkan erreichbar ist. Lokal: http://host.docker.internal:7879 | NUC: http://mkan:7879 (Service-Name).'},
+  'OO_BACKEND':    {s:'Env-Variable: URL des OO-Containers',d:'Gibt mkan an, wohin es /oo/*-Requests proxied. Wenn gesetzt, aktiviert der oo_proxy-Router. Z.B. http://localhost:8088.'},
+  'OO_SECRET':     {s:'Env-Variable: OO-JWT-Secret',      d:'Gemeinsamer Secret-Key für mkan ↔ OO-Kommunikation. Lokal oft leer (JWT_ENABLED=false). Produktiv: sicherer Zufallsstring.'},
+};
+
+// Glossar-Karten rendern
+(function buildGlossar() {
+  const grid = document.getElementById('g-grid');
+  if (!grid) return;
+  Object.keys(GLOSSARY).sort((a,b)=>a.localeCompare(b,'de')).forEach(term => {
+    const g = GLOSSARY[term];
+    const c = document.createElement('div');
+    c.className = 'g-card';
+    c.dataset.q = (term + ' ' + g.s + ' ' + g.d).toLowerCase();
+    c.innerHTML = `<div class="gt">${term}</div><div class="gs">${g.s}</div><div class="gd">${g.d}</div>`;
+    grid.appendChild(c);
+  });
+})();
+
+function filterGlossar(q) {
+  const lq = q.trim().toLowerCase();
+  document.querySelectorAll('.g-card').forEach(c => {
+    c.classList.toggle('hidden', lq !== '' && !c.dataset.q.includes(lq));
+  });
+}
+
+// Begriffe automatisch im Fließtext wrappen
+(function wrapTerms() {
+  const terms = Object.keys(GLOSSARY).sort((a,b) => b.length - a.length);
+  const escaped = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp('(' + escaped.join('|') + ')', 'g');
+
+  function skip(el) {
+    if (!el) return true;
+    const tag = (el.tagName||'').toLowerCase();
+    if (['code','script','style','input','textarea'].includes(tag)) return true;
+    if (el.classList && (el.classList.contains('term') || el.classList.contains('g-card'))) return true;
+    if (el.closest && (el.closest('svg') || el.closest('.toc') || el.closest('#g-grid'))) return true;
+    return false;
+  }
+
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const queue = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (!skip(node.parentElement) && pattern.test(node.textContent)) queue.push(node);
+    pattern.lastIndex = 0;
+  }
+
+  const seen = {};
+  queue.forEach(tn => {
+    if (!tn.parentNode || skip(tn.parentElement)) return;
+    const txt = tn.textContent;
+    pattern.lastIndex = 0;
+    let m, last = 0, frag = document.createDocumentFragment(), changed = false;
+    while ((m = pattern.exec(txt)) !== null) {
+      const term = m[1];
+      seen[term] = (seen[term] || 0) + 1;
+      if (seen[term] > 5) continue;
+      if (m.index > last) frag.appendChild(document.createTextNode(txt.slice(last, m.index)));
+      const sp = document.createElement('span');
+      sp.className = 'term'; sp.dataset.term = term; sp.textContent = term;
+      frag.appendChild(sp);
+      last = m.index + term.length;
+      changed = true;
+    }
+    if (!changed) return;
+    if (last < txt.length) frag.appendChild(document.createTextNode(txt.slice(last)));
+    tn.parentNode.replaceChild(frag, tn);
+  });
+})();
+
+// Tooltip
+const tip = document.createElement('div');
+tip.id = 'gloss-tip';
+document.body.appendChild(tip);
+
+document.addEventListener('mouseover', e => {
+  const el = e.target.closest('.term');
+  if (!el) return;
+  const g = GLOSSARY[el.dataset.term];
+  if (!g) return;
+  tip.innerHTML = `<strong>${el.dataset.term}</strong><i>${g.s}</i>${g.d}`;
+  tip.style.display = 'block';
+  moveTip(e);
+});
+document.addEventListener('mousemove', e => {
+  if (tip.style.display === 'block') moveTip(e);
+});
+document.addEventListener('mouseout', e => {
+  if (!e.relatedTarget || !e.relatedTarget.closest?.('.term')) tip.style.display = 'none';
+});
+
+function moveTip(e) {
+  const sx = window.scrollX, sy = window.scrollY;
+  const vw = window.innerWidth;
+  const tw = tip.offsetWidth || 280, th = tip.offsetHeight || 80;
+  let x = e.clientX + sx - tw / 2;
+  let y = e.clientY + sy - th - 14;
+  x = Math.max(sx + 6, Math.min(x, sx + vw - tw - 6));
+  if (y < sy + 6) y = e.clientY + sy + 20;
+  tip.style.left = x + 'px';
+  tip.style.top  = y + 'px';
+}
+</script>
+</body>
+</html>

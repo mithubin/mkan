@@ -1,0 +1,49 @@
+services:
+  mkan:
+    build: ./server
+    expose:
+      - "8000"
+    volumes:
+      - /mnt/mkan/db:/app/data/db
+      - /mnt/mkan/uploads:/app/data/uploads
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_PATH=/app/data/db/kanban.sqlite
+      - UPLOAD_PATH=/app/data/uploads
+      - OO_URL=${OO_URL}
+      - OO_MKAN_BASE=${OO_MKAN_BASE}
+      - OO_SECRET=${OO_SECRET}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=${SMTP_FROM}
+    networks:
+      - webproxy
+    restart: unless-stopped
+
+  onlyoffice:
+    image: onlyoffice/documentserver
+    expose:
+      - "80"
+    environment:
+      - JWT_ENABLED=true
+      - JWT_SECRET=${OO_SECRET}
+    volumes:
+      - /path/to/mkan/oo-local.json:/etc/onlyoffice/documentserver/local.json:ro
+      - /path/to/mkan/oo-ds.conf:/etc/onlyoffice/documentserver/nginx/ds.conf:ro
+    networks:
+      - webproxy
+    restart: unless-stopped
+
+  excalidraw:
+    image: excalidraw/excalidraw:latest
+    expose:
+      - "80"
+    networks:
+      - webproxy
+    restart: unless-stopped
+
+networks:
+  webproxy:
+    external: true

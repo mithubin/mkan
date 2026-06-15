@@ -1,0 +1,62 @@
+MKAN + ONLYOFFICE NEUSTART (lokal, Ports 7879 + 8088)
+Stand: 2026-06-02
+Alle Befehle einzeln ausfuehren. Sudo braucht Passwort im echten Terminal.
+
+=== SCHRITT 1: Alles stoppen ===
+
+sudo docker stop onlyoffice && sudo docker rm onlyoffice
+kill $(lsof -ti:7879) 2>/dev/null
+kill $(lsof -ti:7878) 2>/dev/null
+
+=== SCHRITT 2: OO-Container starten ===
+
+sudo docker run -d --name onlyoffice -p 8088:80 --add-host=host.docker.internal:host-gateway -e JWT_ENABLED=false onlyoffice/documentserver
+
+=== SCHRITT 3: Warten bis OO bereit ===
+
+sudo docker logs onlyoffice 2>&1 | tail -3
+(Warten bis "embedded converter started" erscheint, ggf. mehrfach ausfuehren)
+
+=== SCHRITT 4: OO IP-Blocking deaktivieren ===
+
+sudo docker exec onlyoffice bash -c 'printf "{\"externalRequest\":{\"action\":{\"blockPrivateIP\":false}},\"services\":{\"CoAuthoring\":{\"request-filtering-agent\":{\"allowPrivateIPAddress\":true,\"allowMetaIPAddress\":true}}}}" > /etc/onlyoffice/documentserver/local.json'
+
+sudo docker exec onlyoffice supervisorctl restart ds:docservice ds:converter
+
+=== SCHRITT 5: mkan starten ===
+
+cd /path/to/mkan/server
+
+OO_BACKEND=http://localhost:8088 OO_MKAN_BASE=http://host.docker.internal:7879 OO_PUBLIC_URL=http://localhost:7879/oo uvicorn main:app --host 0.0.0.0 --port 7879 --reload
+
+BEENDEN- aus einem zweiten Terminal:
+
+  kill $(lsof -ti:7879)
+
+=== BROWSER ===
+
+http://localhost:7879
+
+Beim ERSTEN Start nach Neustart (kein Service Worker Cache):
+  F12 -> Anwendung -> Service Worker -> "Registrierung aufheben"
+  Dann Seite neu laden (F5)
+
+uBlock Origin / AdBlock Plus:
+  Fuer localhost:7879 deaktivieren (OO-Icon -> Power-Button -> Shift+F5)
+  ODER: funktioniert auch ohne, da Analytics-Stub jetzt direkt in index.html
+  injiziert wird (kein separater Analytics.js-Request mehr)
+
+=== ERGEBNIS-TEST ===
+
+Gut: uvicorn zeigt nach OO-Button-Klick:
+  OO download request from 172.17.x.x for <att_id>
+  OO download: serving <dateiname> (...)
+  WebSocket ...doc/... [accepted]
+  connection open
+
+Fehler "herunterladen fehlgeschlagen":
+  Service Worker hat alte index.html gecacht ->
+  F12 -> Anwendung -> Service Worker -> Registrierung aufheben -> F5
+
+Fehler "OO nicht erreichbar":
+  OO-Container laeuft nicht -> Schritte 1-4 wiederholen
