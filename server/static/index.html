@@ -3792,7 +3792,7 @@ async function _buildEmailCardView(c,cont){
       const chip=el('span','');
       chip.style.cssText='display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:.72rem;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--muted);user-select:none';
       chip.title=a.name+(a.size?' ('+_fmtBytes(a.size)+')':'');
-      chip.innerHTML=`<span>${ext}</span><span style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>`;
+      {const _d=a.name.lastIndexOf('.');const _nh=_d>0?`${a.name.slice(0,_d)}<span style="opacity:.28">${a.name.slice(_d)}</span>`:a.name;chip.innerHTML=`<span>${ext}</span><span style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_nh}</span>`;}
       chip.onclick=()=>{
         if(selAtts.has(a.id)){selAtts.delete(a.id);delete selAttsMap[a.id];chip.style.cssText=chip.style.cssText.replace(/background:[^;]+/,'background:var(--bg2)').replace(/color:[^;]+/,'color:var(--muted)').replace(/border-color:[^;]+/,'border-color:var(--border)');}
         else{selAtts.add(a.id);selAttsMap[a.id]=a.name||'?';chip.style.background='var(--acc)';chip.style.color='#fff';chip.style.borderColor='var(--acc)';}
@@ -4015,7 +4015,7 @@ async function _buildEmailCardView(c,cont){
       attDiv.append(document.createTextNode('📎 '));
       allAtts.forEach((a,i)=>{
         if(i)attDiv.append(document.createTextNode(' · '));
-        const sp=el('span','');{const d=a.name.lastIndexOf('.');if(d>0){sp.appendChild(document.createTextNode(a.name.slice(0,d)));const ex=el('span','');ex.textContent=a.name.slice(d);ex.style.cssText='color:var(--muted);opacity:.55';sp.appendChild(ex);}else{sp.textContent=a.name;}}
+        const sp=el('span','');{const d=a.name.lastIndexOf('.');if(d>0){sp.appendChild(document.createTextNode(a.name.slice(0,d)));const ex=el('span','');ex.textContent=a.name.slice(d);ex.style.opacity='.28';sp.appendChild(ex);}else{sp.textContent=a.name;}}
         if(a.url){sp.style.cssText='cursor:pointer;text-decoration:underline;color:var(--acc)';sp.onclick=()=>dlAtt({url:a.url,name:a.name});}
         attDiv.appendChild(sp);
       });
@@ -4559,7 +4559,7 @@ async function _buildSerienLinkCardView(c,cont){
     atts.forEach(a=>{
       const ext=(a.name||'').split('.').pop().toLowerCase();
       const chip=el('span','');chip.style.cssText='display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:.72rem;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--muted);user-select:none';
-      chip.title=a.name;chip.innerHTML=`<span>${ext}</span><span style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>`;
+      chip.title=a.name;{const _d=a.name.lastIndexOf('.');const _nh=_d>0?`${a.name.slice(0,_d)}<span style="opacity:.28">${a.name.slice(_d)}</span>`:a.name;chip.innerHTML=`<span>${ext}</span><span style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_nh}</span>`;}
       chip.onclick=()=>{if(selAtts.has(a.id)){selAtts.delete(a.id);delete selAttsMap[a.id];chip.style.background='var(--bg2)';chip.style.color='var(--muted)';chip.style.borderColor='var(--border)';}else{selAtts.add(a.id);selAttsMap[a.id]=a.name||'?';chip.style.background='var(--acc)';chip.style.color='#fff';chip.style.borderColor='var(--acc)';}};
       wrap.appendChild(chip);
     });
@@ -4645,7 +4645,7 @@ async function _buildSerienLinkCardView(c,cont){
       attDiv.append(document.createTextNode('📎 '));
       slAllAtts.forEach((a,i)=>{
         if(i)attDiv.append(document.createTextNode(' · '));
-        const sp=el('span','');{const d=a.name.lastIndexOf('.');if(d>0){sp.appendChild(document.createTextNode(a.name.slice(0,d)));const ex=el('span','');ex.textContent=a.name.slice(d);ex.style.cssText='color:var(--muted);opacity:.55';sp.appendChild(ex);}else{sp.textContent=a.name;}}
+        const sp=el('span','');{const d=a.name.lastIndexOf('.');if(d>0){sp.appendChild(document.createTextNode(a.name.slice(0,d)));const ex=el('span','');ex.textContent=a.name.slice(d);ex.style.opacity='.28';sp.appendChild(ex);}else{sp.textContent=a.name;}}
         if(a.url){sp.style.cssText='cursor:pointer;text-decoration:underline;color:var(--acc)';sp.onclick=()=>dlAtt({url:a.url,name:a.name});}
         attDiv.appendChild(sp);
       });
@@ -12287,7 +12287,7 @@ function _buildMailAttChips(card){
     const ext=(a.name||'').split('.').pop().toLowerCase();
     chip.style.cssText='display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:.72rem;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--muted);user-select:none';
     chip.title=a.name+(a.size?' ('+_fmtBytes(a.size)+')':'');
-    chip.innerHTML=`<span>${ext}</span><span style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>`;
+    {const _d=a.name.lastIndexOf('.');const _nh=_d>0?`${a.name.slice(0,_d)}<span style="opacity:.28">${a.name.slice(_d)}</span>`:a.name;chip.innerHTML=`<span>${ext}</span><span style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_nh}</span>`;}
     chip.onclick=()=>{
       if(_mailSelAtts.has(a.id)){
         _mailSelAtts.delete(a.id);
