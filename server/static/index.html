@@ -4393,7 +4393,7 @@ async function _buildSerienLinkCardView(c,cont){
   const loadBtn=el('button','btn');loadBtn.textContent='↻ Daten laden';loadBtn.style.cssText='font-size:.72rem;margin-top:5px';
   loadBtn.onclick=()=>_loadSlRows(srcSel,rowsSec);
   cont.appendChild(loadBtn);cont.appendChild(rowsSec);
-  const srcWarn=el('div','');srcWarn.style.cssText='font-size:.69rem;color:var(--muted);margin-top:5px;line-height:1.4';
+  const srcWarn=el('div','');srcWarn.style.cssText='font-size:.69rem;color:rgba(220,38,38,.85);background:rgba(239,68,68,.12);border-radius:4px;padding:4px 7px;margin-top:5px;line-height:1.4';
   srcWarn.textContent='⚠ Datenquelle nicht zwischen Dok-Erzeugung und Versand ändern – Zeilen-Zuordnung geht sonst verloren.';
   cont.appendChild(srcWarn);
 
