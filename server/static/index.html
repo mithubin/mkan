@@ -3609,6 +3609,7 @@ function mkDbCell(lane, col){
   [
     ['Tabellen',    allCards.filter(c=>c.cardType==='table_card')],
     ['Abfragen',    allCards.filter(c=>c.cardType==='query_card')],
+    ['Serien-Hub',  allCards.filter(c=>c.cardType==='serienlink_card')],
     ['Vorlagen',    allCards.filter(c=>['maillink_card','doclink_card','template_card'].includes(c.cardType))],
   ].forEach(([label,cards])=>{
     if(!cards.length)return;
