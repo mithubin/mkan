@@ -1,5 +1,3 @@
-# trello-klon-sv – Technische Referenz für Claude & Milan
-
 Stand: Phase 33 (2026-06-16). Phasenplan + Features → `PROJEKT.md`. Git: Branch `mkan`.
 
 Live: `https://mkan.milan.how/`
@@ -90,11 +88,8 @@ Kleine private Gruppe, kein dringender Bedarf.
 ### Verschlüsselung (ungeplant)
 Zero-Knowledge inkompatibel mit serverseitiger Verarbeitung (OO, DAV, Seriendruck). Optionen: Client-side AES-GCM (bricht OO/DAV), SQLCipher, Extra-Key beim Start.
 
-### WebDAV entfernen
-Unpraktisch: schwerfälliger Zugriff, Client rendert Vorschauen statt Dateien zu öffnen. Entfernen: `server/routers/dav.py` + Import/Mount in `main.py` (`get_dav_app`, `/dav`-Route). Ggf. Abhängigkeit `wsgidav` aus `requirements.txt`.
-
-### Hilfe-Modal für Mail- und Dok-Serienfunktion
-Noch nicht implementiert.
+### WebDAV entfernen + Python-Desktop-Bridge
+WebDAV ist unpraktisch (schwerfälliger Zugriff, gvfs rendert Vorschauen statt Dateien zu öffnen). Geplanter Ersatz: Python-Bridge-Skript (lokal, öffnet Dateien direkt aus mkan via OS-Default-App). Entfernen wenn Bridge steht: `server/routers/dav.py` + Import/Mount in `main.py` (`get_dav_app`, `/dav`-Route) + `wsgidav` aus `requirements.txt`.
 
 ## OnlyOffice-Konfiguration (NUC)
 - OO läuft als Docker-Service `onlyoffice` hinter nginx → `https://onlo.milan.how/`
@@ -110,19 +105,19 @@ Noch nicht implementiert.
 
 Jede Karte hat `card_mode`: `'org'` | `'knowledge'` | `'student'` | `'monster'` | `'email'` | `'doc'`
 
-| Sektion im Modal | Org | Wissen | Schüler | Monster | Mail | Dok |
-|-----------------|:---:|:------:|:-------:|:-------:|:----:|:---:|
-| Notizen/MD | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Notiz/Vorlage-Toggle | — | — | — | — | — | ✓ |
-| Subtasks | ✓ | ✓ | ✓ | ✓ | — | — |
-| Due-Datum + Timer | ✓ | — | — | ✓ | ✓ | — |
-| Dateikarten | ✓ | ✓ | ✓ | ✓ | ✓ | ✓* |
-| Person (Kürzel) | — | — | ✓ | ✓ | — | — |
-| Zugewiesen | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Punkte | — | — | ✓ | ✓ | — | — |
-| Anwesenheits-Widget | — | — | ✓ | ✓ | — | — |
-| emailSec | — | — | — | — | ✓ | — |
-| docSec | — | — | — | — | — | ✓ |
+| Sektion im Modal     | Org | Wissen | Schüler | Monster | Mail | Dok |
+| -------------------- | :-: | :----: | :-----: | :-----: | :--: | :-: |
+| Notizen/MD           |  ✓  |   ✓    |    ✓    |    ✓    |  ✓   |  ✓  |
+| Notiz/Vorlage-Toggle |  —  |   —    |    —    |    —    |  —   |  ✓  |
+| Subtasks             |  ✓  |   ✓    |    ✓    |    ✓    |  —   |  —  |
+| Due-Datum + Timer    |  ✓  |   —    |    —    |    ✓    |  ✓   |  —  |
+| Dateikarten          |  ✓  |   ✓    |    ✓    |    ✓    |  ✓   | ✓*  |
+| Person (Kürzel)      |  —  |   —    |    ✓    |    ✓    |  —   |  —  |
+| Zugewiesen           |  ✓  |   ✓    |    ✓    |    ✓    |  ✓   |  ✓  |
+| Punkte               |  —  |   —    |    ✓    |    ✓    |  —   |  —  |
+| Anwesenheits-Widget  |  —  |   —    |    ✓    |    ✓    |  —   |  —  |
+| emailSec             |  —  |   —    |    —    |    —    |  ✓   |  —  |
+| docSec               |  —  |   —    |    —    |    —    |  —   |  ✓  |
 
 *) Dateikarten sichtbar, aber templateCardId-Karte ist versteckt (mkCard + buildFiles filtern)
 
