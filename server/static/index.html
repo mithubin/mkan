@@ -6885,9 +6885,7 @@ function mkFileItem({name,size,type,isFC,fcId,attId,attUrl,date,onOpen,onDel,onS
     const _ptop=el('div');_ptop.style.cssText='display:flex;gap:6px;align-items:center;';
     const _plbl=el('span');_plbl.style.cssText='font-size:.72rem;color:var(--muted);white-space:nowrap;';_plbl.textContent='→ Karte:';
     const _pinp=el('input');_pinp.placeholder='Suchen…';_pinp.style.cssText='font-size:.72rem;flex:1;min-width:100px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 5px;';
-    const _pok=el('button','btn pri');_pok.textContent='OK';_pok.style.cssText='font-size:.72rem;padding:2px 8px;';
-    const _pcancel=el('button','btn');_pcancel.textContent='✕';_pcancel.style.cssText='font-size:.72rem;padding:2px 6px;';
-    _ptop.append(_plbl,_pinp,_pok,_pcancel);
+    _ptop.append(_plbl,_pinp);
     const _plist=el('div');_plist.style.cssText='max-height:130px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;background:var(--bg2);';
     const _optRow=el('div');_optRow.style.cssText='display:flex;gap:12px;flex-wrap:wrap;';
     const _copyLbl=el('label');_copyLbl.style.cssText='font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer;';
@@ -6895,21 +6893,30 @@ function mkFileItem({name,size,type,isFC,fcId,attId,attUrl,date,onOpen,onDel,onS
     _copyLbl.append(_copyChk,' Kopieren');
     const _faehreLbl=el('label');_faehreLbl.style.cssText='font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer;';
     const _faehreChk=el('input');_faehreChk.type='checkbox';
-    _faehreLbl.append(_faehreChk,' Boardfähre');
-    const _faehreNameRow=el('div');_faehreNameRow.style.cssText='display:none;gap:6px;align-items:center;padding-top:2px;';
+    _faehreLbl.append(_faehreChk,' Boardfähre / neue Karte');
+    // Boardfähre-Modus: eigene Zeile mit Namens-Input, Picker wird ausgeblendet
+    const _faehreNameRow=el('div');_faehreNameRow.style.cssText='display:none;gap:6px;align-items:center;';
     const _faehreNameLbl=el('span');_faehreNameLbl.style.cssText='font-size:.72rem;color:var(--muted);white-space:nowrap;';_faehreNameLbl.textContent='Name:';
     const _faehreInp=el('input');_faehreInp.style.cssText='font-size:.72rem;flex:1;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 5px;';
     _faehreInp.onclick=e=>e.stopPropagation();
     _faehreNameRow.append(_faehreNameLbl,_faehreInp);
     _faehreChk.onchange=()=>{
-      _faehreNameRow.style.display=_faehreChk.checked?'flex':'none';
-      if(_faehreChk.checked){_faehreInp.value=name;requestAnimationFrame(()=>_faehreInp.focus());}
+      const f=_faehreChk.checked;
+      _ptop.style.display=f?'none':'flex';
+      _plist.style.display=f?'none':'';
+      _faehreNameRow.style.display=f?'flex':'none';
+      if(f){_faehreInp.value='MOVE_'+name;requestAnimationFrame(()=>_faehreInp.focus());}
+      else requestAnimationFrame(()=>_pinp.focus());
     };
     const _linkLbl=el('label');_linkLbl.style.cssText='font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer;';
     const _linkChk=el('input');_linkChk.type='checkbox';
     _linkLbl.append(_linkChk,' Link zur Zielkarte');
     _optRow.append(...(onCopy?[_copyLbl]:[]),_faehreLbl,_linkLbl);
-    _picker.append(_ptop,_plist,_optRow,_faehreNameRow);
+    const _pbtnRow=el('div');_pbtnRow.style.cssText='display:flex;gap:6px;justify-content:flex-end;';
+    const _pok=el('button','btn pri');_pok.textContent='OK';_pok.style.cssText='font-size:.72rem;padding:2px 8px;';
+    const _pcancel=el('button','btn');_pcancel.textContent='✕';_pcancel.style.cssText='font-size:.72rem;padding:2px 6px;';
+    _pbtnRow.append(_pok,_pcancel);
+    _picker.append(_ptop,_plist,_faehreNameRow,_optRow,_pbtnRow);
     let _pickedId=null;
     function _renderPList(q){
       _plist.innerHTML='';_pickedId=null;
@@ -6919,19 +6926,20 @@ function mkFileItem({name,size,type,isFC,fcId,attId,attUrl,date,onOpen,onDel,onS
         .sort((a,b)=>(a.title||'').localeCompare(b.title||''))
         .slice(0,30);
       if(!results.length){const e=el('div');e.style.cssText='padding:4px 7px;font-size:.72rem;color:var(--muted);';e.textContent='Keine Treffer';_plist.appendChild(e);return;}
-      results.forEach(c=>{
+      results.forEach((c,i)=>{
         const col=S.columns.find(x=>x.id===c.colId);
         const depth=c.parentCardId?'↳ ':'';
         const row=el('div');row.style.cssText='padding:3px 7px;cursor:pointer;font-size:.72rem;border-bottom:1px solid var(--border);user-select:none;';
         row.textContent=depth+(c.title||'(kein Titel)')+(col?' · '+col.title:'');
-        row.onmouseenter=()=>{if(row.dataset.picked!=='1')row.style.background='var(--bg3)';};
-        row.onmouseleave=()=>{if(row.dataset.picked!=='1')row.style.background='';};
-        row.onclick=e=>{
-          e.stopPropagation();
+        const _select=()=>{
           _pickedId=c.id;
           _plist.querySelectorAll('[data-picked]').forEach(x=>{x.style.background='';delete x.dataset.picked;});
           row.dataset.picked='1';row.style.background='rgba(99,102,241,.18)';
         };
+        if(i===0)_select();
+        row.onmouseenter=()=>{if(row.dataset.picked!=='1')row.style.background='var(--bg3)';};
+        row.onmouseleave=()=>{if(row.dataset.picked!=='1')row.style.background='';};
+        row.onclick=e=>{e.stopPropagation();_select();};
         _plist.appendChild(row);
       });
     }
@@ -6946,14 +6954,24 @@ function mkFileItem({name,size,type,isFC,fcId,attId,attUrl,date,onOpen,onDel,onS
     _pinp.onclick=e=>e.stopPropagation();
     _pok.onclick=async e=>{
       e.stopPropagation();
-      if(!_pickedId){toast('Bitte eine Karte auswählen');return;}
       try{
-        let targetId=_pickedId;
+        let targetId=null;
         if(_faehreChk.checked){
-          const faehreTitle=_faehreInp.value.trim()||name;
-          const r=await api('POST','/cards',{board_id:S.id,title:faehreTitle,parentCardId:_pickedId,cardType:'card'});
-          S.cards[r.id]=r;targetId=r.id;
-          refreshParentCard(_pickedId);
+          // Top-Level-Karte in gleicher Spalte/Lane wie Quellkarte
+          const sc=S.cards[srcCardId];
+          if(!sc){toast('Quellkarte nicht gefunden');return;}
+          const faehreTitle=_faehreInp.value.trim()||('MOVE_'+name);
+          const r=await api('POST','/cards',{board_id:S.id,title:faehreTitle,col_id:sc.colId,lane_id:sc.laneId,cardType:'card'});
+          const newCard={...r,colId:sc.colId,laneId:sc.laneId,parentCardId:null,cardType:'card',title:faehreTitle,cardMode:'org',notes:'',subtasks:[],attachments:[],labelIds:[]};
+          S.cards[r.id]=newCard;
+          const cellKey=ck(sc.laneId,sc.colId);
+          if(!S.cells[cellKey])S.cells[cellKey]=[];
+          S.cells[cellKey].push(r.id);
+          renderBoard();
+          targetId=r.id;
+        } else {
+          if(!_pickedId){toast('Bitte eine Karte auswählen');return;}
+          targetId=_pickedId;
         }
         if(onCopy&&_copyChk.checked) await onCopy(targetId);
         else await onMove(targetId);

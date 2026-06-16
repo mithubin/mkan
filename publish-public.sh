@@ -6,17 +6,18 @@ PUB="$SRC/../mkan-public"
 
 echo "=== mkan public sync ==="
 
-# Alle tracked files kopieren (außer userdata)
-git -C "$SRC" ls-files | grep -v "^trel_sv userdata.md$" | while read f; do
+# Alle tracked files kopieren (außer userdata) — IFS+read -r -d '' für Sonderzeichen in Namen
+git -C "$SRC" ls-files -z | grep -zv "^trel_sv userdata.md$" | while IFS= read -r -d '' f; do
   mkdir -p "$PUB/$(dirname "$f")"
   cp "$SRC/$f" "$PUB/$f"
 done
 
 # Sensitive Strings ersetzen
 cd "$PUB"
-sed -i 's|9Zm8fplquxCfGWfQoHwe|YOUR_OO_SECRET_HERE|g' CLAUDE.md docker-compose.yml 2>/dev/null || true
-sed -i 's|milnuc@milnus|user@yourserver|g' CLAUDE.md deploy.sh deploy-mkan.sh DEPLOY.md 2>/dev/null || true
-sed -i 's|/home/milnuc/mkan/|/path/to/mkan/|g' CLAUDE.md docker-compose.yml 2>/dev/null || true
+TECREF="trello-klon-sv – Technische Referenz für Claude & Milan.md"
+sed -i 's|9Zm8fplquxCfGWfQoHwe|YOUR_OO_SECRET_HERE|g' "$TECREF" docker-compose.yml 2>/dev/null || true
+sed -i 's|milnuc@milnus|user@yourserver|g' "$TECREF" deploy.sh deploy-mkan.sh DEPLOY.md 2>/dev/null || true
+sed -i 's|/home/milnuc/mkan/|/path/to/mkan/|g' "$TECREF" docker-compose.yml 2>/dev/null || true
 sed -i 's|milnuc:milnuc|mkanuser:mkanuser|g' DEPLOY.md 2>/dev/null || true
 sed -i 's|mkan\.milan\.how|mkan.yourdomain.example|g' nginx-block.conf DEPLOY.md mkan-architektur.html 2>/dev/null || true
 
