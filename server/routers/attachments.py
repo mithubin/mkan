@@ -283,6 +283,136 @@ async def update_attachment_content(
     return {'ok': True, 'size': size}
 
 
+@router.get('/{att_id}/preview-text')
+def preview_attachment_text(att_id: str, user_id: str = Depends(current_user_id)):
+    with get_conn() as conn:
+        att = conn.execute(
+            'SELECT a.id, a.filename, a.path, a.card_id, c.board_id FROM attachments a JOIN cards c ON a.card_id=c.id WHERE a.id=?',
+            (att_id,),
+        ).fetchone()
+        if not att:
+            raise HTTPException(404, 'Attachment not found')
+        require_board_access(att['board_id'], user_id, conn)
+
+    path = att['path']
+    name = att['filename'] or ''
+    ext = name.rsplit('.', 1)[-1].lower() if '.' in name else ''
+    MAX_CHARS = 3000
+
+    try:
+        if ext == 'docx':
+            from docx import Document
+            doc = Document(path)
+            text = '\n'.join(p.text for p in doc.paragraphs if p.text.strip())
+
+        elif ext == 'odt':
+            import xml.etree.ElementTree as ET
+            NS_T = 'urn:oasis:names:tc:opendocument:xmlns:text:1.0'
+            with zipfile.ZipFile(path) as z:
+                with z.open('content.xml') as f:
+                    tree = ET.parse(f)
+            parts = []
+            for p in tree.iter(f'{{{NS_T}}}p'):
+                t = ''.join(p.itertext())
+                if t.strip():
+                    parts.append(t)
+            text = '\n'.join(parts)
+
+        elif ext == 'xlsx':
+            import openpyxl
+            wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+            ws = wb.active
+            rows = []
+            for row in ws.iter_rows(values_only=True):
+                cells = [str(c) if c is not None else '' for c in row]
+                if any(c.strip() for c in cells):
+                    rows.append('\t'.join(cells))
+                if sum(len(r) for r in rows) > MAX_CHARS:
+                    break
+            wb.close()
+            text = '\n'.join(rows)
+
+        elif ext == 'ods':
+            import xml.etree.ElementTree as ET
+            NS_TAB = 'urn:oasis:names:tc:opendocument:xmlns:table:1.0'
+            with zipfile.ZipFile(path) as z:
+                with z.open('content.xml') as f:
+                    tree = ET.parse(f)
+            rows = []
+            for row in tree.iter(f'{{{NS_TAB}}}table-row'):
+                cells = [''.join(cell.itertext()).strip()
+                         for cell in row.iter(f'{{{NS_TAB}}}table-cell')]
+                line = '\t'.join(cells).rstrip('\t')
+                if line.strip():
+                    rows.append(line)
+                if sum(len(r) for r in rows) > MAX_CHARS:
+                    break
+            text = '\n'.join(rows)
+
+        elif ext == 'pptx':
+            import xml.etree.ElementTree as ET
+            NS_A = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+            parts = []
+            with zipfile.ZipFile(path) as z:
+                slides = sorted(n for n in z.namelist()
+                                if n.startswith('ppt/slides/slide') and n.endswith('.xml'))
+                for sname in slides:
+                    with z.open(sname) as f:
+                        tree = ET.parse(f)
+                    texts = [t.text for t in tree.iter(f'{{{NS_A}}}t')
+                             if t.text and t.text.strip()]
+                    if texts:
+                        parts.append(' '.join(texts))
+                    if sum(len(p) for p in parts) > MAX_CHARS:
+                        break
+            text = '\n'.join(parts)
+
+        elif ext == 'odp':
+            import xml.etree.ElementTree as ET
+            NS_T = 'urn:oasis:names:tc:opendocument:xmlns:text:1.0'
+            with zipfile.ZipFile(path) as z:
+                with z.open('content.xml') as f:
+                    tree = ET.parse(f)
+            parts = []
+            for p in tree.iter(f'{{{NS_T}}}p'):
+                t = ''.join(p.itertext())
+                if t.strip():
+                    parts.append(t)
+            text = '\n'.join(parts)
+
+        elif ext == 'xls':
+            import xlrd
+            wb = xlrd.open_workbook(path)
+            ws = wb.sheet_by_index(0)
+            rows = []
+            for i in range(ws.nrows):
+                cells = [str(ws.cell_value(i, j)) for j in range(ws.ncols)]
+                line = '\t'.join(c for c in cells if c)
+                if line.strip():
+                    rows.append(line)
+                if sum(len(r) for r in rows) > MAX_CHARS:
+                    break
+            text = '\n'.join(rows)
+
+        elif ext == 'doc':
+            import subprocess
+            result = subprocess.run(['antiword', path], capture_output=True, timeout=15)
+            if result.returncode != 0:
+                raise HTTPException(400, 'antiword nicht verfügbar oder Lesefehler')
+            text = result.stdout.decode('utf-8', errors='replace')
+
+        else:
+            raise HTTPException(400, f'Vorschau nicht unterstützt für .{ext}')
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f'Lesefehler: {e}')
+
+    truncated = len(text) > MAX_CHARS
+    return {'text': text[:MAX_CHARS], 'truncated': truncated}
+
+
 def _is_tar(path: str, fname: str) -> bool:
     f = fname.lower()
     return (f.endswith('.tar') or f.endswith('.tar.gz') or f.endswith('.tgz')

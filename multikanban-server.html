@@ -1727,7 +1727,6 @@
       <div style="display:flex;gap:6px;align-items:center">
         <div id="fcNavInline" style="display:none;align-items:center;gap:4px;margin-right:4px;"></div>
         <button class="btn" id="toCardBtn" title="Zur Karte im Board navigieren">⌖ Zur Karte</button>
-        <button class="btn pri" id="dbSaveBtn" style="display:none">💾 Speichern</button>
         <button class="btn" id="dupBtn">⧉ Duplizieren</button>
         <button class="btn" id="dupLinkBtn">⧉🔗</button>
         <button class="btn" id="copyBtn">↗ Kopieren</button>
@@ -2224,6 +2223,7 @@ let _dbDragId = null;
 let _dbDropOver = null;
 let _dbDropAfter = false;
 let _hoveredCardId = null;
+let _activeUploadFn = null;
 let _isMobile = false;
 function _initMobile(){
   _isMobile = window.innerWidth < 680;
@@ -5509,12 +5509,7 @@ function _buildTemplateCardView(c,cont){
     }catch(e){toast('Fehler: '+e.message);}
     finally{prevBtn.disabled=false;prevBtn.textContent='▶ Vorschau-Dok';}
   };
-  const saveBtn=el('button','btn pri');saveBtn.textContent='💾 Speichern';
-  saveBtn.onclick=async()=>{
-    await saveModalChanges();
-    saveBtn.textContent='✓';setTimeout(()=>saveBtn.textContent='💾 Speichern',1400);
-  };
-  tplActRow.append(prevBtn,saveBtn);tplSec.appendChild(tplActRow);
+  tplActRow.append(prevBtn);tplSec.appendChild(tplActRow);
 
   // ── Seriendruck ────────────────────────────────────────────────────────
   const serieSec=_dbSec(cont,'Seriendruck');
@@ -5765,7 +5760,7 @@ function mkCard(card){
       const fic=el('span','fqp-ico');fic.innerHTML=fileTypeIcon(a.type||'');
       const fnm=el('span','fqp-nm');fnm.textContent=a.name;fnm.title=a.name;
       chip.append(fic,fnm);chip.onclick=ev=>{ev.stopPropagation();openModal(card.id);};
-      attachHp(chip,()=>({url:a.url,name:a.name,type:a.type||'',size:a.size||0}),800);
+      attachHp(chip,()=>({url:a.url,name:a.name,type:a.type||'',size:a.size||0,id:a.id}),1000);
       fstrip.appendChild(chip);
     });
     if(legacyAtts.length>6){const m=el('span','');m.style.cssText='font-size:.52rem;color:var(--muted);align-self:center;';m.textContent='+'+(legacyAtts.length-6);fstrip.appendChild(m);}
@@ -5785,8 +5780,8 @@ function mkCard(card){
       chip.draggable=true;
       chip.addEventListener('dragstart',ev=>{ev.stopPropagation();ev.dataTransfer.setData('cid',fc.id);ev.dataTransfer.effectAllowed='move';});
       chip.addEventListener('dragend',ev=>{document.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'));});
-      if(att)attachHp(chip,()=>({url:att.url,name:att.name,type:att.type||'',size:att.size||0,cardId:fc.id}),800);
-      else{const _te=(fc.title||'').split('.').pop().toLowerCase();if(['txt','md','py','js','ts','json','yaml','yml','sh','html','css','xml','csv'].includes(_te))attachHpNotes(chip,fc.id,fc.title,'',800);}
+      if(att)attachHp(chip,()=>({url:att.url,name:att.name,type:att.type||'',size:att.size||0,id:att.id,cardId:fc.id}),1000);
+      else{const _te=(fc.title||'').split('.').pop().toLowerCase();if(['txt','md','py','js','ts','json','yaml','yml','sh','html','css','xml','csv'].includes(_te))attachHpNotes(chip,fc.id,fc.title,'',1000);}
       fcstrip.appendChild(chip);
     });
     if(filecards.length>8){const m=el('span','');m.style.cssText='font-size:.52rem;color:var(--muted);align-self:center;';m.textContent='+'+(filecards.length-8);fcstrip.appendChild(m);}
@@ -5812,10 +5807,10 @@ function mkCard(card){
         gc.slice(0,maxShow).forEach(g=>{
           const d=el('span','mc-gc-dot');d.style.background=g.bgColor||'#6b7280';d.title=g.title;if(g.cardMode==='doc')d.classList.add('mode-doc');if(g.cardMode==='knowledge')d.classList.add('mode-knowledge');
           const gfc=Object.values(S.cards).filter(c=>c.parentCardId===g.id&&c.cardType==='file_card');
-          if(gfc.length){const row=el('span','mc-gc-fdots');gfc.slice(0,3).forEach(f=>{const att=f.attachments?.[0];const fd=el('span','mc-gc-fdot');fd.style.background=fileTypeColor(att?.type||'');fd.title=f.title||'Datei';if(att)attachHp(fd,()=>({url:att.url,name:att.name,type:att.type||'',size:att.size||0,cardId:f.id}),1000);row.appendChild(fd);});d.appendChild(row);}
+          if(gfc.length){const row=el('span','mc-gc-fdots');gfc.slice(0,3).forEach(f=>{const att=f.attachments?.[0];const fd=el('span','mc-gc-fdot');fd.style.background=fileTypeColor(att?.type||'');fd.title=f.title||'Datei';if(att)attachHp(fd,()=>({url:att.url,name:att.name,type:att.type||'',size:att.size||0,id:att.id,cardId:f.id}),1200);row.appendChild(fd);});d.appendChild(row);}
           gcrow.appendChild(d);shown++;
         });
-        gcFiles.slice(0,Math.max(0,maxShow-shown)).forEach(f=>{const att=f.attachments?.[0];const d=el('span','mc-gc-ring');d.style.borderColor=fileTypeColor(att?.type||'');d.title=f.title||'Datei';if(att)attachHp(d,()=>({url:att.url,name:att.name,type:att.type||'',size:att.size||0,cardId:f.id}),1000);gcrow.appendChild(d);shown++;});
+        gcFiles.slice(0,Math.max(0,maxShow-shown)).forEach(f=>{const att=f.attachments?.[0];const d=el('span','mc-gc-ring');d.style.borderColor=fileTypeColor(att?.type||'');d.title=f.title||'Datei';if(att)attachHp(d,()=>({url:att.url,name:att.name,type:att.type||'',size:att.size||0,id:att.id,cardId:f.id}),1200);gcrow.appendChild(d);shown++;});
         const total=gc.length+gcFiles.length;
         if(total>shown){const m=el('span','mc-gc-more');m.textContent='+'+(total-shown);gcrow.appendChild(m);}
         mc.appendChild(gcrow);
@@ -5998,14 +5993,6 @@ function openModal(id){
   // Footer-Buttons je Kartentyp
   const _dbFooterBtns=['dupBtn','dupLinkBtn','copyBtn'];
   _dbFooterBtns.forEach(id=>{ $(id).style.display=isDbCard?'none':''; });
-  $('dbSaveBtn').style.display=isDbCard?'none':'';
-  $('dbSaveBtn').onclick=async()=>{
-    await saveModalChanges();
-    const btn=$('dbSaveBtn');const orig=btn.textContent;
-    btn.textContent='✓ Gespeichert';btn.disabled=true;
-    setTimeout(()=>{btn.textContent=orig;btn.disabled=false;},1400);
-  };
-
   if(isDbCard){
     $('dbCardView').style.display='';$('fcView').style.display='none';$('fcNavInline').style.display='none';$('fcNavInline').innerHTML='';$('cardView').style.display='none';
     const typeMap={table_card:'⊟ Tabelle',query_card:'⊞ Abfrage',template_card:'⊡ MD-Template',maillink_card:'✉ E-Mail-Template',doclink_card:'▤ Dok-Template',serienlink_card:'⊕ Serien-Hub',log_card:'📋 Log'};
@@ -6095,6 +6082,7 @@ function closeModalUI() {
   $('overlay').classList.add('hidden');
   $('srchInp').value='';$('srchDrop').style.display='none';
   openId = null;
+  _activeUploadFn = null;
 }
 
 async function closeModal() {
@@ -6702,6 +6690,7 @@ function buildFiles(card){
     itemEl.ondragleave=()=>itemEl.classList.remove('drag-over');
     itemEl.ondrop=async e=>{
       e.preventDefault();itemEl.classList.remove('drag-over');
+      if(e.dataTransfer.files.length){await doUploadFiles([...e.dataTransfer.files]);return;}
       if(_fileDrag<0||_fileDrag===idx){_fileDrag=-1;return;}
       const [moved]=allItems.splice(_fileDrag,1);
       allItems.splice(idx,0,moved);
@@ -6737,11 +6726,12 @@ function buildFiles(card){
     }
     buildFiles(card);refreshParentCard(card.id);
   }
+  _activeUploadFn = doUploadFiles;
   const inp=$('fileInput');inp.onchange=async()=>{await doUploadFiles([...inp.files]);inp.value='';};
 
   // Drop-Zone-Stripe mit Buttons rechts
   const dz=el('div','file-dropzone');
-  const dzTxt=el('span','');dzTxt.textContent='Hierher ziehen…';dzTxt.style.flex='1';
+  const dzTxt=el('span','');dzTxt.textContent='Hierher ziehen…';dzTxt.style.cssText='flex:1;pointer-events:none';
   const dzBtn=el('button','file-dz-btn');dzBtn.textContent='📄';dzBtn.title='Datei hochladen';
   dzBtn.onclick=e=>{e.stopPropagation();inp.click();};
   const dzTxtBtn=el('button','file-dz-btn');dzTxtBtn.innerHTML=bIcon('file-earmark-richtext');dzTxtBtn.title='Text-/MD-Datei anlegen';
@@ -6798,10 +6788,23 @@ function buildFiles(card){
   dzGalBtn.onclick=e=>{e.stopPropagation();if(fcs.length)openGallery(card.id);else toast('Keine Dateikarten');};
   dz.onclick=e=>{if(e.target!==dzBtn&&e.target!==dzTxtBtn&&e.target!==dzExBtn&&e.target!==dzZipBtn&&e.target!==dzGalBtn)inp.click();};
   dz.append(dzTxt,dzTxtBtn,...(dzExBtn?[dzExBtn]:[]),dzZipBtn,dzGalBtn,dzBtn);
-  dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag-over');};
-  dz.ondragleave=()=>dz.classList.remove('drag-over');
-  dz.ondrop=async e=>{e.preventDefault();dz.classList.remove('drag-over');await doUploadFiles([...e.dataTransfer.files]);};
-  list.appendChild(dz);
+  const _dzHandleDrop=async e=>{
+    e.preventDefault();dz.classList.remove('drag-over');
+    const files=e.dataTransfer.files.length
+      ? [...e.dataTransfer.files]
+      : [...(e.dataTransfer.items||[])].filter(i=>i.kind==='file').map(i=>i.getAsFile()).filter(Boolean);
+    if(files.length)await doUploadFiles(files);
+  };
+  const _dzHandleDragover=e=>{e.preventDefault();dz.classList.add('drag-over');};
+  dz.ondragover=_dzHandleDragover;
+  dz.ondragleave=e=>{if(!dz.contains(e.relatedTarget))dz.classList.remove('drag-over');};
+  dz.ondrop=_dzHandleDrop;
+  // Buttons inside dz: assign handlers directly so drop fires in target phase (Wayland/Chrome compat)
+  [dzTxt,dzTxtBtn,...(dzExBtn?[dzExBtn]:[]),dzZipBtn,dzGalBtn,dzBtn].forEach(ch=>{
+    ch.ondragover=_dzHandleDragover;
+    ch.ondrop=_dzHandleDrop;
+  });
+  list.prepend(dz);
 }
 
 function mkFileItem({name,size,type,isFC,fcId,attId,attUrl,date,onOpen,onDel,onSetCover,onMove,draggable:isDraggable}){
@@ -6893,8 +6896,8 @@ function mkFileItem({name,size,type,isFC,fcId,attId,attUrl,date,onOpen,onDel,onS
   // Inline-Vorschau (für Legacy-Anhänge) oder Modal (für file_cards)
   const prevArea=el('div','file-inline-prev');
   let prevLoaded=false;
-  if(attUrl)attachHp(row,()=>({url:attUrl,name,type,size,cardId:isFC?fcId:null}),300);
-  else if(isTextFC)attachHpNotes(row,fcId,name,type,300);
+  if(attUrl)attachHp(row,()=>({url:attUrl,name,type,size,id:attId,cardId:isFC?fcId:null}),500);
+  else if(isTextFC)attachHpNotes(row,fcId,name,type,500);
   row.onclick=async()=>{
     if(isFC){onOpen();return;}
     // Toggle Inline-Vorschau
@@ -7075,6 +7078,7 @@ document.addEventListener('paste', async e=>{
 
 $('mClose').onclick=closeModal;
 $('overlay').onclick=e=>{if(e.target===$('overlay'))closeModal();};
+$('overlay').addEventListener('dragover',e=>{if(_activeUploadFn&&[...e.dataTransfer.types].includes('Files')){e.preventDefault();e.dataTransfer.dropEffect='copy';}});
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){if(_paintMode){deactivatePaint();}else if(!$('plannerOverlay').classList.contains('hidden')){if(_plSplitMode){_plSplitMode=false;document.body.style.cursor='';toast('Teilungsmodus beendet');}else if(!$('plModal').classList.contains('hidden')){closePlannerModal();}else if(openId){closeModal();}else{closePlanner();}}else if(!$('calOverlay').classList.contains('hidden')){closeCalendar();}else if(!$('galOverlay').classList.contains('hidden')){closeGallery();}else if(!$('videoOverlay').classList.contains('hidden')){closeVideoView();}else if(!$('pdfOverlay').classList.contains('hidden')){closePdfView();}else if(!$('exOverlay').classList.contains('hidden')){closeExcalidraw();}else if($('mainModal').classList.contains('fullscreen')){toggleModalFull();}else if(openId)closeModal();else clearSelection();}
   if(e.altKey&&e.ctrlKey&&e.key.toLowerCase()==='n'){e.preventDefault();if(!$('galOverlay').classList.contains('hidden'))galToggleComment();}
@@ -9865,7 +9869,8 @@ async function _hpShow(att,e){
   const TXT_EXT2=['txt','md','json','yaml','yml','py','sh','bash','js','ts','html','css','csv','xml','log','ini','toml','rs','go','java','c','cpp','h'];
   const isTxtAtt=(att.type||'').startsWith('text/')||TXT_EXT2.includes(_ext2);
   const isEmlAtt=_ext2==='eml'||(att.type||'').includes('message/rfc822');
-  d.classList.toggle('hp-wide',isPdfAtt||isTxtAtt||isEmlAtt);
+  const isDocAtt=['docx','odt','xlsx','ods','pptx','odp'].includes(_ext2)&&!!att.id;
+  d.classList.toggle('hp-wide',isPdfAtt||isTxtAtt||isEmlAtt||isDocAtt);
   d.innerHTML='<div class="fc-nopreview" style="font-size:1rem;padding:14px">⋯</div>';
   d.style.cursor=att.cardId?'pointer':'default';
   d.onclick=att.cardId?()=>{_hpHide();closeModalUI();openModal(att.cardId);}:null;
@@ -9883,7 +9888,7 @@ function _hpHide(withDelay=false){
   else{const d=_hp();if(d)d.classList.remove('hp-on');}
 }
 
-function attachHp(elem,getAtt,delay=300){
+function attachHp(elem,getAtt,delay=500){
   elem.addEventListener('mouseenter',e=>{
     _hpCurE=e;clearTimeout(_hpTimer);
     _hpTimer=setTimeout(()=>_hpShow(getAtt(),_hpCurE),delay);
@@ -9892,7 +9897,7 @@ function attachHp(elem,getAtt,delay=300){
   elem.addEventListener('mouseleave',()=>_hpHide(true));
 }
 
-function attachHpNotes(elem,fcId,name,type,delay=300){
+function attachHpNotes(elem,fcId,name,type,delay=500){
   // Hover-Preview für notes-basierte Dateikarten (kein Anhang)
   const show=async e=>{
     const d=_hp();if(!d)return;
@@ -10183,31 +10188,10 @@ async function buildFcView(card){
     };
     revBtn.onclick=()=>revInp.click();actsEl.append(revBtn,revInp);
 
-    // Archiv-Vorschau + Extrahieren (ZIP, TAR, 7z)
+    // Archiv-Entpacken (ZIP, TAR, 7z) — Vorschau/Listing läuft via renderFilePreview
     const _isArc=['zip','tar','tgz','gz','bz2','xz','7z'].includes(_fcExt)||
       (att.name||'').toLowerCase().match(/\.(tar\.(gz|bz2|xz))$/);
     if(_isArc){
-      const arcSec=el('div');arcSec.style.cssText='margin-top:10px;border-top:1px solid var(--border);padding-top:8px;';
-      const arcLbl=el('div','slbl');arcLbl.textContent='Archiv-Inhalt';arcLbl.style.marginBottom='6px';arcSec.appendChild(arcLbl);
-      const arcList=el('div');arcList.style.cssText='font-size:.78rem;max-height:220px;overflow-y:auto;margin-bottom:8px;';
-      arcList.innerHTML='<span style="color:var(--muted)">Lade…</span>';
-      arcSec.appendChild(arcList);
-      fetch('/attachments/'+att.id+'/list',{headers:{Authorization:'Bearer '+TOKEN}})
-        .then(r=>r.ok?r.json():r.json().then(j=>{throw new Error(j.detail||'Fehler');}))
-        .then(({files})=>{
-          arcList.innerHTML='';
-          const hdr=el('div');hdr.style.cssText='color:var(--muted);font-size:.7rem;margin-bottom:4px;';
-          hdr.textContent=files.length+' Einträge';arcList.appendChild(hdr);
-          files.forEach(f=>{
-            const row=el('div');row.style.cssText='display:flex;align-items:center;gap:6px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.05);';
-            const ico=el('span');ico.style.cssText='flex-shrink:0;font-size:.8rem;opacity:.65;';
-            ico.innerHTML=f.is_dir?bIcon('folder'):fileTypeIcon((f.name||'').split('.').pop().toLowerCase());
-            const nm=el('span');nm.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';nm.textContent=f.name;nm.title=f.name;
-            const sz=el('span');sz.style.cssText='color:var(--muted);font-size:.68rem;white-space:nowrap;flex-shrink:0;';sz.textContent=f.is_dir?'':fmtSize(f.size);
-            row.append(ico,nm,sz);arcList.appendChild(row);
-          });
-        })
-        .catch(e=>{arcList.innerHTML='<span style="color:var(--muted);font-size:.72rem">'+e.message+'</span>';});
       const extBtn=el('button','fc-act-btn');extBtn.innerHTML=bIcon('folder2-open')+' Entpacken → Dateikarten';
       extBtn.onclick=async()=>{
         extBtn.disabled=true;extBtn.innerHTML=bIcon('hourglass-split');
@@ -10223,8 +10207,7 @@ async function buildFcView(card){
         }catch(e){toast('Fehler: '+e.message);}
         finally{extBtn.disabled=false;extBtn.innerHTML=bIcon('folder2-open')+' Entpacken → Dateikarten';}
       };
-      arcSec.appendChild(extBtn);
-      actsEl.appendChild(arcSec);
+      actsEl.appendChild(extBtn);
     }
   }
   {
@@ -10542,6 +10525,38 @@ async function renderFilePreview(container,att){
         if(typeof hljs!=='undefined')hljs.highlightElement(code);
       }
     }catch(e){container.innerHTML='<div class="fc-nopreview">⚠<span>Vorschau nicht verfügbar</span></div>';}
+  } else if(['docx','odt','xlsx','ods','pptx','odp','doc','xls'].includes(ext)&&att.id){
+    container.innerHTML='<div class="fc-nopreview" style="font-size:1rem">⋯<span style="font-size:.68rem">Lade…</span></div>';
+    try{
+      const r=await api('GET','/attachments/'+att.id+'/preview-text');
+      if(!r.text||!r.text.trim()){
+        container.innerHTML='<div class="fc-nopreview">'+bIcon('file-earmark-text','fc-nopreview-ico')+'<span>Kein Text extrahierbar</span></div>';
+      } else {
+        const pre=document.createElement('pre');
+        pre.style.cssText='margin:0;padding:14px;font-size:.76rem;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:var(--text);width:100%;box-sizing:border-box;';
+        pre.textContent=r.text;
+        container.innerHTML='';container.appendChild(pre);
+        if(r.truncated){const t=document.createElement('div');t.style.cssText='font-size:.66rem;color:var(--muted);padding:0 14px 8px';t.textContent='… (Vorschau, gekürzt auf 3000 Zeichen)';container.appendChild(t);}
+      }
+    }catch(e){container.innerHTML='<div class="fc-nopreview">⚠<span>Vorschau nicht verfügbar</span></div>';}
+  } else if((['zip','7z'].includes(ext)||(att.name||'').match(/\.(tar|tgz|tar\.gz|tar\.bz2|tar\.xz)$/i))&&att.id){
+    container.innerHTML='<div class="fc-nopreview" style="font-size:1rem">⋯<span style="font-size:.68rem">Lade…</span></div>';
+    try{
+      const r=await fetch('/attachments/'+att.id+'/list',{headers:{Authorization:'Bearer '+TOKEN}});
+      if(!r.ok)throw new Error('Fehler');
+      const {files}=await r.json();
+      const wrap=document.createElement('div');wrap.style.cssText='width:100%;padding:8px 12px;';
+      const hdr=document.createElement('div');hdr.style.cssText='font-size:.7rem;color:var(--muted);margin-bottom:6px;';
+      hdr.textContent=files.length+' Einträge';wrap.appendChild(hdr);
+      files.forEach(f=>{
+        const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:.78rem;';
+        const ico=document.createElement('span');ico.innerHTML=f.is_dir?bIcon('folder'):fileTypeIcon((f.name||'').split('.').pop().toLowerCase());ico.style.cssText='flex-shrink:0;opacity:.7;';
+        const nm=document.createElement('span');nm.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);';nm.textContent=f.name;nm.title=f.name;
+        const sz=document.createElement('span');sz.style.cssText='color:var(--muted);font-size:.68rem;white-space:nowrap;flex-shrink:0;';sz.textContent=f.is_dir?'':fmtSize(f.size||0);
+        row.append(ico,nm,sz);wrap.appendChild(row);
+      });
+      container.innerHTML='';container.appendChild(wrap);
+    }catch(e){container.innerHTML='<div class="fc-nopreview">⚠<span>Archiv-Vorschau nicht verfügbar</span></div>';}
   } else {
     container.innerHTML='<div class="fc-nopreview">'+fileTypeIcon(type||ext)+'<span>'+att.name+'</span><span style="font-size:.65rem">'+fmtSize(att.size||0)+'</span></div>';
   }
@@ -12147,19 +12162,79 @@ async function _initDocSec(card){
   $('docSec').appendChild(dlWrap);
 }
 
+async function _showDocRevModal(card,tc,att,atts){
+  const existing=document.getElementById('_docRevModal');if(existing)existing.remove();
+  const overlay=el('div','overlay');overlay.id='_docRevModal';
+  overlay.onclick=e=>{if(e.target===overlay)overlay.remove();};
+  const modal=el('div','modal');modal.style.cssText='max-width:420px;width:95%;max-height:80vh;display:flex;flex-direction:column';
+  const head=el('div','m-head');
+  const ttl=el('span','');ttl.style.cssText='font-size:1rem;font-weight:600;color:var(--text);flex:1';ttl.textContent='▤ Vorlagen-Versionen';
+  const closeBtn=el('button','m-close');closeBtn.textContent='✕';closeBtn.onclick=()=>overlay.remove();
+  head.append(ttl,closeBtn);modal.appendChild(head);
+  const body=el('div','m-body');body.style.cssText='padding:14px 16px;gap:0;overflow-y:auto;flex-direction:column';
+  // Aktuelle Version
+  const curLbl=el('div','slbl');curLbl.textContent='Aktuelle Version';body.appendChild(curLbl);
+  const curRow=el('div','');curRow.style.cssText='display:flex;align-items:center;gap:6px;margin-top:4px';
+  const nm=el('span','');nm.style.cssText='flex:1;font-size:.8rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+  nm.textContent=att?att.name:'—';nm.title=att?.name||'';
+  const dlBtn=el('button','btn');dlBtn.innerHTML=bIcon('download')+' Herunterladen';dlBtn.style.cssText='font-size:.72rem';
+  dlBtn.onclick=()=>{if(att)dlAtt({url:att.url,name:att.name});};
+  curRow.append(nm,dlBtn);body.appendChild(curRow);
+  const revInp=document.createElement('input');revInp.type='file';revInp.style.display='none';
+  revInp.accept='.docx,.odt,.xlsx,.ods,.pptx,.odp';
+  revInp.onchange=async()=>{
+    const f=revInp.files[0];if(!f)return;
+    const fd=new FormData();fd.append('file',f);
+    await fetch('/attachments/cards/'+tc.id,{method:'POST',headers:{Authorization:'Bearer '+TOKEN},body:fd});
+    toast('Neue Version hochgeladen');overlay.remove();
+    const fresh=await api('GET','/cards/'+card.id);Object.assign(card,fresh);S.cards[card.id]=card;
+    await _renderDocTplManage(card);
+  };
+  const ulBtn=el('button','btn');ulBtn.innerHTML=bIcon('upload')+' Neue Version hochladen';ulBtn.style.cssText='font-size:.72rem;margin-top:6px;width:100%';
+  ulBtn.onclick=()=>revInp.click();body.append(ulBtn,revInp);
+  // Revisionen
+  const prevAtts=atts.slice(0,-1).reverse();
+  if(prevAtts.length){
+    const sep=el('div','');sep.style.cssText='border-top:1px solid var(--border);margin:10px 0 6px';body.appendChild(sep);
+    const histLbl=el('div','slbl');histLbl.textContent='Revisionen ('+prevAtts.length+')';body.appendChild(histLbl);
+    prevAtts.forEach(old=>{
+      const row=el('div','');row.style.cssText='display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:.72rem;color:var(--muted)';
+      const dt=new Date((old.createdAt||'').replace(/(\.\d{3})\d+/,'$1'));
+      const dtStr=dt.toLocaleDateString('de',{day:'2-digit',month:'2-digit',year:'2-digit'})+' '+dt.toLocaleTimeString('de',{hour:'2-digit',minute:'2-digit'});
+      const info=el('span','');info.style.cssText='flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      info.textContent=dtStr+' · '+fmtSize(old.size);info.title=old.name;
+      const dlOld=el('button','btn');dlOld.textContent='↓';dlOld.style.cssText='padding:1px 7px;font-size:.68rem';
+      dlOld.title='Herunterladen: '+old.name;dlOld.onclick=()=>dlAtt({url:old.url,name:old.name});
+      const delOld=el('button','btn dng');delOld.textContent='✕';delOld.style.cssText='padding:1px 6px;font-size:.68rem';
+      delOld.onclick=async()=>{
+        if(!confirm('Revision vom '+dtStr+' löschen?'))return;
+        await api('DELETE','/attachments/'+old.id);
+        const fresh=await api('GET','/cards/'+card.id);Object.assign(card,fresh);S.cards[card.id]=card;
+        overlay.remove();await _renderDocTplManage(card);
+      };
+      row.append(info,dlOld,delOld);body.appendChild(row);
+    });
+  }
+  modal.appendChild(body);overlay.appendChild(modal);document.body.appendChild(overlay);
+}
+
 async function _renderDocTplManage(card){
   const wrap=$('docTplManage');if(!wrap)return;
   wrap.innerHTML='';
   const cs=JSON.parse(card.cardSettings||'{}');
   if(cs.templateCardId&&S.cards[cs.templateCardId]){
     const tc=S.cards[cs.templateCardId];
-    const att=tc.attachments?.[0];
+    const atts=(tc.attachments||[]).slice().sort((a,b)=>a.createdAt<b.createdAt?-1:1);
+    const att=atts[atts.length-1]||tc.attachments?.[0];
     const row=el('div','');row.style.cssText='display:flex;align-items:center;gap:6px';
     const nm=el('span','');nm.style.cssText='flex:1;font-size:.78rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
     nm.textContent=att?.name||tc.title||'vorlage.docx';
     const editBtn=el('button','btn');editBtn.textContent='✏ OO öffnen';editBtn.style.cssText='font-size:.7rem;white-space:nowrap';
     editBtn.onclick=()=>{if(att)openOO(att.id,att.name);else _docSetView('vorlage');};
     row.append(nm,editBtn);wrap.appendChild(row);
+    const revBtn=el('button','btn');revBtn.innerHTML=bIcon('clock-history')+' Neue Version';revBtn.style.cssText='font-size:.68rem;margin-top:4px;width:100%';
+    revBtn.onclick=()=>_showDocRevModal(card,tc,att,atts);
+    wrap.appendChild(revBtn);
   } else {
     const btn=el('button','btn');btn.textContent='+ Vorlage anlegen';btn.style.cssText='font-size:.75rem;width:100%';
     btn.onclick=()=>_createDocTemplate(card);
