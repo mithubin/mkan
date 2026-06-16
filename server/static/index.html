@@ -6650,8 +6650,16 @@ function buildFiles(card){
           const tc=S.cards[targetId];if(!tc)return;
           await api('PATCH','/cards/'+fc.id,{parentCardId:targetId,colId:tc.colId,laneId:tc.laneId});
           if(S.cards[fc.id])Object.assign(S.cards[fc.id],{parentCardId:targetId,colId:tc.colId,laneId:tc.laneId});
-          buildFiles(card);refreshParentCard(card.id);toast('Dateikarte verschoben');
+          buildFiles(card);refreshParentCard(card.id);refreshParentCard(targetId);toast('Dateikarte verschoben');
         },
+        onCopy:async(targetId)=>{
+          const tc=S.cards[targetId];if(!tc)return;
+          const r=await api('POST','/cards/'+fc.id+'/duplicate');
+          await api('PATCH','/cards/'+r.id,{parentCardId:targetId,colId:tc.colId,laneId:tc.laneId});
+          const fresh=await api('GET','/cards/'+r.id);
+          S.cards[r.id]=fresh;refreshParentCard(targetId);toast('Dateikarte kopiert');
+        },
+        srcCardId:card.id,
         onSetCover:(att&&(att.type||'').startsWith('image/'))?async()=>{
           try{
             const resp=await fetch(att.url,{headers:{Authorization:'Bearer '+TOKEN}});
@@ -6677,8 +6685,16 @@ function buildFiles(card){
           await api('PATCH','/attachments/'+a.id+'/move',{card_id:targetId});
           const fresh=await api('GET','/cards/'+card.id);
           Object.assign(card,fresh);S.cards[card.id]=card;
-          buildFiles(card);refreshParentCard(card.id);toast('Anhang verschoben');
+          buildFiles(card);refreshParentCard(card.id);refreshParentCard(targetId);toast('Anhang verschoben');
         },
+        onCopy:async(targetId)=>{
+          const resp=await fetch(a.url,{headers:{Authorization:'Bearer '+TOKEN}});
+          const blob=await resp.blob();
+          const fd=new FormData();fd.append('file',blob,a.name);
+          await apiForm('POST','/attachments/cards/'+targetId,fd);
+          refreshParentCard(targetId);toast('Anhang kopiert');
+        },
+        srcCardId:card.id,
         draggable:true
       };
     }
@@ -6807,7 +6823,7 @@ function buildFiles(card){
   list.prepend(dz);
 }
 
-function mkFileItem({name,size,type,isFC,fcId,attId,attUrl,date,onOpen,onDel,onSetCover,onMove,draggable:isDraggable}){
+function mkFileItem({name,size,type,isFC,fcId,attId,attUrl,date,onOpen,onDel,onSetCover,onMove,onCopy,srcCardId,draggable:isDraggable}){
   // Typ aus Dateiname ableiten wenn kein MIME
   if(!type){const ext=(name||'').split('.').pop().toLowerCase();if(ext==='md')type='text/markdown';else if(ext==='txt')type='text/plain';}
   const isTextFC=isFC&&!attUrl&&(type==='text/markdown'||type==='text/plain');
@@ -6865,28 +6881,86 @@ function mkFileItem({name,size,type,isFC,fcId,attId,attUrl,date,onOpen,onDel,onS
   if(onMove){
     const mv=el('button','file-act');mv.innerHTML=bIcon('arrow-right');mv.title=isFC?'Dateikarte verschieben':'Anhang verschieben';
     _picker=el('div');
-    _picker.style.cssText='padding:5px 8px;background:var(--bg3);border-top:1px solid var(--border);gap:6px;align-items:center;flex-wrap:wrap;';
-    _picker.style.display='none';
+    _picker.style.cssText='padding:5px 8px;background:var(--bg3);border-top:1px solid var(--border);display:none;flex-direction:column;gap:4px;';
+    const _ptop=el('div');_ptop.style.cssText='display:flex;gap:6px;align-items:center;';
     const _plbl=el('span');_plbl.style.cssText='font-size:.72rem;color:var(--muted);white-space:nowrap;';_plbl.textContent='→ Karte:';
-    const _psel=el('select');_psel.style.cssText='font-size:.72rem;flex:1;min-width:120px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px;';
+    const _pinp=el('input');_pinp.placeholder='Suchen…';_pinp.style.cssText='font-size:.72rem;flex:1;min-width:100px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 5px;';
     const _pok=el('button','btn pri');_pok.textContent='OK';_pok.style.cssText='font-size:.72rem;padding:2px 8px;';
     const _pcancel=el('button','btn');_pcancel.textContent='✕';_pcancel.style.cssText='font-size:.72rem;padding:2px 6px;';
-    _picker.append(_plbl,_psel,_pok,_pcancel);
+    _ptop.append(_plbl,_pinp,_pok,_pcancel);
+    const _plist=el('div');_plist.style.cssText='max-height:130px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;background:var(--bg2);';
+    const _optRow=el('div');_optRow.style.cssText='display:flex;gap:12px;flex-wrap:wrap;';
+    const _copyLbl=el('label');_copyLbl.style.cssText='font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer;';
+    const _copyChk=el('input');_copyChk.type='checkbox';
+    _copyLbl.append(_copyChk,' Kopieren');
+    const _faehreLbl=el('label');_faehreLbl.style.cssText='font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer;';
+    const _faehreChk=el('input');_faehreChk.type='checkbox';
+    _faehreLbl.append(_faehreChk,' Boardfähre');
+    const _faehreNameRow=el('div');_faehreNameRow.style.cssText='display:none;gap:6px;align-items:center;padding-top:2px;';
+    const _faehreNameLbl=el('span');_faehreNameLbl.style.cssText='font-size:.72rem;color:var(--muted);white-space:nowrap;';_faehreNameLbl.textContent='Name:';
+    const _faehreInp=el('input');_faehreInp.style.cssText='font-size:.72rem;flex:1;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 5px;';
+    _faehreInp.onclick=e=>e.stopPropagation();
+    _faehreNameRow.append(_faehreNameLbl,_faehreInp);
+    _faehreChk.onchange=()=>{
+      _faehreNameRow.style.display=_faehreChk.checked?'flex':'none';
+      if(_faehreChk.checked){_faehreInp.value=name;requestAnimationFrame(()=>_faehreInp.focus());}
+    };
+    const _linkLbl=el('label');_linkLbl.style.cssText='font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer;';
+    const _linkChk=el('input');_linkChk.type='checkbox';
+    _linkLbl.append(_linkChk,' Link zur Zielkarte');
+    _optRow.append(...(onCopy?[_copyLbl]:[]),_faehreLbl,_linkLbl);
+    _picker.append(_ptop,_plist,_optRow,_faehreNameRow);
+    let _pickedId=null;
+    function _renderPList(q){
+      _plist.innerHTML='';_pickedId=null;
+      const results=Object.values(S.cards)
+        .filter(c=>c.cardType!=='file_card'&&(!S.myColId||c.colId===S.myColId))
+        .filter(c=>!q||(c.title||'').toLowerCase().includes(q.toLowerCase()))
+        .sort((a,b)=>(a.title||'').localeCompare(b.title||''))
+        .slice(0,30);
+      if(!results.length){const e=el('div');e.style.cssText='padding:4px 7px;font-size:.72rem;color:var(--muted);';e.textContent='Keine Treffer';_plist.appendChild(e);return;}
+      results.forEach(c=>{
+        const col=S.columns.find(x=>x.id===c.colId);
+        const depth=c.parentCardId?'↳ ':'';
+        const row=el('div');row.style.cssText='padding:3px 7px;cursor:pointer;font-size:.72rem;border-bottom:1px solid var(--border);user-select:none;';
+        row.textContent=depth+(c.title||'(kein Titel)')+(col?' · '+col.title:'');
+        row.onmouseenter=()=>{if(row.dataset.picked!=='1')row.style.background='var(--bg3)';};
+        row.onmouseleave=()=>{if(row.dataset.picked!=='1')row.style.background='';};
+        row.onclick=e=>{
+          e.stopPropagation();
+          _pickedId=c.id;
+          _plist.querySelectorAll('[data-picked]').forEach(x=>{x.style.background='';delete x.dataset.picked;});
+          row.dataset.picked='1';row.style.background='rgba(99,102,241,.18)';
+        };
+        _plist.appendChild(row);
+      });
+    }
     mv.onclick=e=>{
       e.stopPropagation();
       if(_picker.style.display!=='none'){_picker.style.display='none';return;}
-      _psel.innerHTML='';
-      Object.values(S.cards)
-        .filter(c=>c.cardType!=='file_card'&&!c.parentCardId)
-        .sort((a,b)=>(a.title||'').localeCompare(b.title||''))
-        .forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.title;_psel.appendChild(o);});
+      _pinp.value='';_renderPList('');
       _picker.style.display='flex';
+      requestAnimationFrame(()=>_pinp.focus());
     };
+    _pinp.oninput=()=>_renderPList(_pinp.value);
+    _pinp.onclick=e=>e.stopPropagation();
     _pok.onclick=async e=>{
       e.stopPropagation();
-      const tid=_psel.value;if(!tid)return;
-      try{await onMove(tid);_picker.style.display='none';}
-      catch(ex){toast('Fehler: '+ex.message);}
+      if(!_pickedId){toast('Bitte eine Karte auswählen');return;}
+      try{
+        let targetId=_pickedId;
+        if(_faehreChk.checked){
+          const faehreTitle=_faehreInp.value.trim()||name;
+          const r=await api('POST','/cards',{board_id:S.id,title:faehreTitle,parentCardId:_pickedId,cardType:'card'});
+          S.cards[r.id]=r;targetId=r.id;
+          refreshParentCard(_pickedId);
+        }
+        if(onCopy&&_copyChk.checked) await onCopy(targetId);
+        else await onMove(targetId);
+        if(_linkChk.checked&&srcCardId&&srcCardId!==targetId)
+          await api('POST','/cards/'+srcCardId+'/board-links',{target_card_id:targetId,target_board_id:S.id}).catch(()=>{});
+        _picker.style.display='none';
+      }catch(ex){toast('Fehler: '+ex.message);}
     };
     _pcancel.onclick=e=>{e.stopPropagation();_picker.style.display='none';};
     acts.appendChild(mv);
