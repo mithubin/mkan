@@ -389,7 +389,7 @@ def delete_card(card_id: str, user_id: str = Depends(current_user_id)):
 
 
 @router.post('/{card_id}/duplicate', status_code=201)
-def duplicate_card(card_id: str, linked: bool = False, user_id: str = Depends(current_user_id)):
+def duplicate_card(card_id: str, linked: bool = False, with_attachments: bool = True, user_id: str = Depends(current_user_id)):
     _board_id = _new_id = _ts = _new_pos = None
     _ev_data = {}
     with get_conn() as conn:
@@ -456,24 +456,25 @@ def duplicate_card(card_id: str, linked: bool = False, user_id: str = Depends(cu
             label_ids.append(row['label_id'])
 
         # Copy attachments
-        att_rows = conn.execute(
-            'SELECT id, filename, path, size, mime FROM attachments WHERE card_id=?', (card_id,)
-        ).fetchall()
         new_atts = []
-        for att in att_rows:
-            if not os.path.exists(att['path']):
-                continue
-            new_att_id = uid()
-            new_card_dir = os.path.join(UPLOAD_PATH, new_id)
-            os.makedirs(new_card_dir, exist_ok=True)
-            new_att_path = os.path.join(new_card_dir, f'{new_att_id}_{att["filename"]}')
-            shutil.copy2(att['path'], new_att_path)
-            conn.execute(
-                'INSERT INTO attachments (id, card_id, filename, path, size, mime, created_at) VALUES (?,?,?,?,?,?,?)',
-                (new_att_id, new_id, att['filename'], new_att_path, att['size'], att['mime'], ts),
-            )
-            new_atts.append({'id': new_att_id, 'name': att['filename'], 'size': att['size'], 'type': att['mime'],
-                             'url': f'/attachments/{new_att_id}/file'})
+        if with_attachments:
+            att_rows = conn.execute(
+                'SELECT id, filename, path, size, mime FROM attachments WHERE card_id=?', (card_id,)
+            ).fetchall()
+            for att in att_rows:
+                if not os.path.exists(att['path']):
+                    continue
+                new_att_id = uid()
+                new_card_dir = os.path.join(UPLOAD_PATH, new_id)
+                os.makedirs(new_card_dir, exist_ok=True)
+                new_att_path = os.path.join(new_card_dir, f'{new_att_id}_{att["filename"]}')
+                shutil.copy2(att['path'], new_att_path)
+                conn.execute(
+                    'INSERT INTO attachments (id, card_id, filename, path, size, mime, created_at) VALUES (?,?,?,?,?,?,?)',
+                    (new_att_id, new_id, att['filename'], new_att_path, att['size'], att['mime'], ts),
+                )
+                new_atts.append({'id': new_att_id, 'name': att['filename'], 'size': att['size'], 'type': att['mime'],
+                                 'url': f'/attachments/{new_att_id}/file'})
 
         if linked:
             a, b = (card_id, new_id) if card_id < new_id else (new_id, card_id)

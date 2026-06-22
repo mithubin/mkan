@@ -849,6 +849,15 @@
       padding: 2px 5px; border-radius: 3px; font-size: .82rem; }
     .lnk-del:hover { color: var(--dng); }
     .lnk-row-dim { opacity: .55; }
+    .lnk-drag { color: var(--muted); cursor: grab; font-size: .9rem; user-select: none; padding: 0 1px; opacity: .4; flex-shrink: 0; line-height: 1; }
+    .lnk-drag:hover { opacity: 1; }
+    .lnk-dragging { opacity: .35; outline: 1px dashed var(--acc); }
+    .lnk-drop-over { border-color: var(--acc2) !important; background: color-mix(in srgb,var(--acc2) 10%,var(--bg3)); }
+    .dup-confirm-overlay { position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center; }
+    .dup-confirm-box { background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px 24px;min-width:280px;max-width:380px;display:flex;flex-direction:column;gap:14px; }
+    .dup-confirm-box h3 { font-size:.92rem;font-weight:700;margin:0; }
+    .dup-confirm-chk { display:flex;align-items:center;gap:8px;font-size:.82rem;cursor:pointer; }
+    .dup-confirm-btns { display:flex;gap:8px;justify-content:flex-end; }
     .lnk-deep-warn { font-size: .65rem; color: #f97316; background: rgba(249,115,22,.12);
       border: 1px solid rgba(249,115,22,.3); border-radius: 3px; padding: 1px 5px; white-space: nowrap; }
 
@@ -7100,19 +7109,35 @@ function buildAttendanceSec(card){
 
 function buildLinks(card){
   const list=$('lnkList');list.innerHTML='';
-  // intra-board links
-  (card.linkedCards||[]).forEach(lid=>{
+  // intra-board links with drag-to-reorder
+  let _dragIdx=null;
+  (card.linkedCards||[]).forEach((lid,idx)=>{
     const lc=S.cards[lid];if(!lc)return;
     const deep=cardHasDepth(lid)||!!lc.parentCardId;
     const row=el('div','lnk-row'+(F.flatMode>0&&deep?' lnk-row-dim':''));
+    row.draggable=true;
+    row.dataset.linkIdx=idx;
+    row.addEventListener('dragstart',e=>{_dragIdx=idx;e.dataTransfer.effectAllowed='move';setTimeout(()=>row.classList.add('lnk-dragging'),0);});
+    row.addEventListener('dragend',()=>row.classList.remove('lnk-dragging'));
+    row.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';list.querySelectorAll('.lnk-drop-over').forEach(r=>r.classList.remove('lnk-drop-over'));row.classList.add('lnk-drop-over');});
+    row.addEventListener('dragleave',()=>row.classList.remove('lnk-drop-over'));
+    row.addEventListener('drop',e=>{
+      e.preventDefault();e.stopPropagation();row.classList.remove('lnk-drop-over');
+      const toIdx=idx;if(_dragIdx===null||_dragIdx===toIdx)return;
+      const arr=[...card.linkedCards];const[moved]=arr.splice(_dragIdx,1);arr.splice(toIdx,0,moved);
+      card.linkedCards=arr;buildLinks(card);
+      api('PATCH','/cards/'+card.id,{linkedCards:arr}).catch(()=>{});
+    });
+    const dh=el('span','lnk-drag');dh.textContent='⠿';dh.title='Reihenfolge ziehen';
+    dh.addEventListener('mousedown',e=>e.stopPropagation());
     const ct=el('span','lnk-tag');ct.textContent=colOf(lid)?.title||'?';
     const lt=el('span','lnk-tag');lt.textContent=laneOf(lid)?.title||'?';
     const ti=el('span','lnk-title');ti.textContent=lc.title;
     if(F.flatMode>0&&deep){const w=el('span','lnk-deep-warn');w.textContent='tiefer verlinkt';row.appendChild(w);}
     const rm=el('button','lnk-del');rm.innerHTML='✕';
     rm.onclick=async e=>{e.stopPropagation();card.linkedCards=card.linkedCards.filter(x=>x!==lid);if(S.cards[lid])S.cards[lid].linkedCards=(S.cards[lid].linkedCards||[]).filter(x=>x!==card.id);buildLinks(card);await api('PATCH','/cards/'+card.id,{linkedCards:card.linkedCards||[]}).catch(()=>{});};
-    row.onclick=()=>{closeModalUI();openModal(lid);};
-    row.append(ct,lt,ti,rm);list.appendChild(row);
+    row.onclick=e=>{if(e.target===dh||e.target===rm)return;closeModalUI();openModal(lid);};
+    row.append(dh,ct,lt,ti,rm);list.appendChild(row);
   });
   // cross-board links
   api('GET','/cards/'+card.id+'/board-links').then(bls=>{
@@ -7363,14 +7388,45 @@ $('moveBtn').onclick=async()=>{
 
 async function doDuplicate(linked){
   if(!openId)return;
-  try{
-    const path='/cards/'+openId+'/duplicate'+(linked?'?linked=true':'');
-    const r=await api('POST',path);
-    closeModalUI();
-    await loadBoard(S.id);
-    if(S.cards[r.id])openModal(r.id);
-    toast(linked?'Karte dupliziert + verknüpft':'Karte dupliziert');
-  }catch(e){}
+  const card=S.cards[openId];
+  const attCount=(card?.attachments||[]).length;
+  if(attCount>0){
+    await new Promise(resolve=>{
+      const ov=document.createElement('div');ov.className='dup-confirm-overlay';
+      const box=document.createElement('div');box.className='dup-confirm-box';
+      const h=document.createElement('h3');h.textContent='Karte duplizieren';
+      const lbl=document.createElement('label');lbl.className='dup-confirm-chk';
+      const chk=document.createElement('input');chk.type='checkbox';chk.checked=true;
+      lbl.append(chk,' Dateianhänge mitkopieren ('+attCount+' Datei'+(attCount===1?'':'en')+')');
+      const btns=document.createElement('div');btns.className='dup-confirm-btns';
+      const okBtn=document.createElement('button');okBtn.className='btn pri';okBtn.textContent='Duplizieren';
+      const abBtn=document.createElement('button');abBtn.className='btn';abBtn.textContent='Abbrechen';
+      btns.append(abBtn,okBtn);
+      box.append(h,lbl,btns);ov.appendChild(box);document.body.appendChild(ov);
+      abBtn.onclick=()=>{document.body.removeChild(ov);resolve(null);};
+      okBtn.onclick=async()=>{
+        const wa=chk.checked;
+        document.body.removeChild(ov);
+        try{
+          let path='/cards/'+openId+'/duplicate'+(linked?'?linked=true':'');
+          if(!wa)path+=(linked?'&':'?')+'with_attachments=false';
+          const r=await api('POST',path);
+          closeModalUI();await loadBoard(S.id);
+          if(S.cards[r.id])openModal(r.id);
+          toast(linked?'Karte dupliziert + verknüpft':'Karte dupliziert');
+        }catch(e){}
+        resolve();
+      };
+    });
+  }else{
+    try{
+      const path='/cards/'+openId+'/duplicate'+(linked?'?linked=true':'');
+      const r=await api('POST',path);
+      closeModalUI();await loadBoard(S.id);
+      if(S.cards[r.id])openModal(r.id);
+      toast(linked?'Karte dupliziert + verknüpft':'Karte dupliziert');
+    }catch(e){}
+  }
 }
 $('toCardBtn').onclick=async()=>{
   if(!openId)return;
