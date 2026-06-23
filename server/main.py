@@ -1,15 +1,16 @@
+import json
 import os
 import pathlib
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.wsgi import WSGIMiddleware
 
-from db import init_db
+from db import get_conn, init_db
 from routers import auth, boards, cards, columns, swimlanes, labels, attachments, events
 from routers import persons, snapshots, klassenbuch, cardtables, onlyoffice, oo_proxy, admin, boarddb, fonts, mail, convert, adminpanel, planner, export, mail_composer, docs
-from auth import promote_admin_on_startup
+from auth import current_user_id, promote_admin_on_startup
 from routers.dav import get_dav_app
 
 STATIC_DIR = pathlib.Path(__file__).parent / 'static'
@@ -48,6 +49,61 @@ def health():
     return {'status': 'ok'}
 
 
+@app.get('/theme')
+def get_theme(user_id: str = Depends(current_user_id)):
+    with get_conn() as conn:
+        row = conn.execute('SELECT settings FROM users WHERE id=?', (user_id,)).fetchone()
+    try:
+        prefs = json.loads(row['settings'] or '{}')
+        t = prefs.get('theme')
+        if not t:
+            raise HTTPException(status_code=404)
+        return t
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=404)
+
+
+@app.post('/theme', status_code=204)
+async def post_theme(request: Request, user_id: str = Depends(current_user_id)):
+    body = await request.json()
+    with get_conn() as conn:
+        row = conn.execute('SELECT settings FROM users WHERE id=?', (user_id,)).fetchone()
+        prefs = {}
+        try:
+            prefs = json.loads(row['settings'] or '{}')
+        except Exception:
+            pass
+        prefs['theme'] = body
+        conn.execute('UPDATE users SET settings=? WHERE id=?', (json.dumps(prefs), user_id))
+
+
+@app.get('/snapshots')
+def get_snapshots(user_id: str = Depends(current_user_id)):
+    with get_conn() as conn:
+        row = conn.execute('SELECT settings FROM users WHERE id=?', (user_id,)).fetchone()
+    try:
+        prefs = json.loads(row['settings'] or '{}')
+        return prefs.get('snapshots') or []
+    except Exception:
+        return []
+
+
+@app.post('/snapshots', status_code=204)
+async def post_snapshots(request: Request, user_id: str = Depends(current_user_id)):
+    body = await request.json()
+    with get_conn() as conn:
+        row = conn.execute('SELECT settings FROM users WHERE id=?', (user_id,)).fetchone()
+        prefs = {}
+        try:
+            prefs = json.loads(row['settings'] or '{}')
+        except Exception:
+            pass
+        prefs['snapshots'] = body
+        conn.execute('UPDATE users SET settings=? WHERE id=?', (json.dumps(prefs), user_id))
+
+
 app.include_router(auth.router,        prefix='/auth',        tags=['auth'])
 app.include_router(boards.router,      prefix='/boards',      tags=['boards'])
 app.include_router(cards.router,       prefix='/cards',       tags=['cards'])
@@ -73,7 +129,6 @@ app.include_router(export.router,                             tags=['export'])
 app.include_router(mail_composer.router,                      tags=['mail_composer'])
 app.include_router(docs.router,          prefix='/cards',      tags=['docs'])
 
-from fastapi import Request
 from fastapi.responses import RedirectResponse
 
 _dav_wsgi = WSGIMiddleware(get_dav_app())

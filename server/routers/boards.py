@@ -143,6 +143,7 @@ def build_board_response(board_id: str, conn, requesting_user_id: str | None = N
             'attendanceN': c['attendance_n'] if 'attendance_n' in c.keys() else None,
             'attendanceData': c['attendance_data'] if 'attendance_data' in c.keys() else None,
             'coverPos': c['cover_pos'] if 'cover_pos' in c.keys() else None,
+            'dvShared': bool(c['dv_shared']) if 'dv_shared' in c.keys() else False,
             'updatedAt': c['updated_at'],
             'createdBy': c['created_by'] if 'created_by' in c.keys() else None,
         }

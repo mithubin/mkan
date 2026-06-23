@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Multi-Kanban</title>
   <script>window.Analytics={track:function(){},identify:function(){},initialize:function(){}};</script>
+  <link rel="stylesheet" href="/static/tul-theme.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <style>
     :root {
@@ -584,7 +585,7 @@
     /* Attendance overlay on card */
     .card-att-overlay { position:absolute; inset:0; border-radius:var(--rs); pointer-events:none; }
     /* Mode toggle buttons in breadcrumb */
-    .mode-btns { display:flex; gap:3px; flex-shrink:0; }
+    .mode-btns { display:flex; gap:3px; flex-shrink:0; margin-left:auto; }
     .mode-btn { background:none; border:1px solid var(--border); border-radius:4px; color:var(--muted); cursor:pointer; font-size:.67rem; padding:2px 7px; transition:all .1s; }
     .mode-btn.active { background:var(--acc); border-color:var(--acc); color:#fff; }
     .paint-btn { background:none; border:1px dashed var(--border); border-radius:4px; color:var(--muted); cursor:pointer; font-size:.67rem; padding:2px 7px; transition:all .1s; margin-left:4px; }
@@ -719,10 +720,10 @@
     .md-body.mode-edit .md-ta{display:block;}.md-body.mode-edit .md-prev{display:none;}
     .md-body.mode-preview .md-ta{display:none;}.md-body.mode-preview .md-prev{display:block;}
     .md-body.mode-split .md-ta{display:block;}.md-body.mode-split .md-prev{display:block;}
-    /* Resize: split + preview — Container ziehbar, Inhalt füllt ihn */
+    /* Resize: split + preview — Container ziehbar, Inhalt füllt ihn; kein innerer Griff */
     .md-body.mode-split,.md-body.mode-preview{resize:vertical;overflow:hidden;min-height:120px;}
     .md-body.mode-split .md-ta{resize:none;align-self:stretch;height:100%;box-sizing:border-box;}
-    .md-body.mode-split .md-prev,.md-body.mode-preview .md-prev{flex:1;align-self:stretch;overflow-y:auto;height:100%;max-height:none;box-sizing:border-box;}
+    .md-body.mode-split .md-prev,.md-body.mode-preview .md-prev{flex:1;align-self:stretch;overflow-y:auto;height:100%;max-height:none;box-sizing:border-box;resize:none;}
     .md-prev{flex:1;min-width:0;overflow-y:auto;max-height:280px;font-size:.84rem;line-height:1.6;color:var(--text);padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);display:none;}
     .md-prev p{margin:.35em 0;}.md-prev h1,.md-prev h2,.md-prev h3{margin:.5em 0 .2em;font-weight:600;}
     .md-prev h1{font-size:1.1em;}.md-prev h2{font-size:1em;}.md-prev h3{font-size:.92em;}
@@ -849,6 +850,10 @@
       padding: 2px 5px; border-radius: 3px; font-size: .82rem; }
     .lnk-del:hover { color: var(--dng); }
     .lnk-row-dim { opacity: .55; }
+    .lnk-drag { color: var(--muted); cursor: grab; font-size: .9rem; user-select: none; padding: 0 1px; opacity: .4; flex-shrink: 0; line-height: 1; }
+    .lnk-drag:hover { opacity: 1; }
+    .lnk-dragging { opacity: .35; outline: 1px dashed var(--acc); }
+    .lnk-drop-over { border-color: var(--acc2) !important; background: color-mix(in srgb,var(--acc2) 10%,var(--bg3)); }
     .lnk-deep-warn { font-size: .65rem; color: #f97316; background: rgba(249,115,22,.12);
       border: 1px solid rgba(249,115,22,.3); border-radius: 3px; padding: 1px 5px; white-space: nowrap; }
 
@@ -885,12 +890,42 @@
       transition: opacity .2s, transform .2s; pointer-events: none; }
     .toast.show { opacity: 1; transform: translateY(0); }
 
-    html.theme-transition, html.theme-transition * {
-      transition: background-color 0.3s ease, color 0.2s ease, border-color 0.3s ease !important;
+    /* tul-theme panels inside modals — kein floating */
+    #tlt-main-slot .tlt-float-panel,
+    #tlt-lab-slot .tlt-float-panel {
+      position: static !important; box-shadow: none !important;
+      border: none !important; border-radius: 0 !important;
+      width: 100% !important; max-height: none !important;
     }
-    .th-pick { width:44px; height:34px; border:2px solid var(--border); border-radius:6px; cursor:pointer; padding:0; flex-shrink:0; outline:none; transition:border-color .14s; }
+    #tlt-main-slot .tlt-fp-header,
+    #tlt-lab-slot .tlt-fp-header { display: none !important; }
+    #tlt-main-slot .tlt-fp-body,
+    #tlt-lab-slot .tlt-fp-body {
+      padding: 10px 14px !important; max-height: none !important; overflow: visible !important;
+    }
+    /* Theme-Modals: schwaches Overlay, oben-rechts positioniert */
+    #tltThemeModal, #tltLabModal {
+      background: rgba(0,0,0,.18) !important;
+      backdrop-filter: none !important;
+      align-items: flex-start !important;
+      justify-content: flex-end !important;
+      padding: 56px 16px 16px !important;
+      pointer-events: none;
+    }
+    #tltThemeModal .modal, #tltLabModal .modal {
+      pointer-events: auto;
+      max-height: calc(100vh - 72px);
+    }
+    #tltThemeModal .m-head, #tltLabModal .m-head {
+      cursor: move;
+      user-select: none;
+    }
+    /* mkan-Extras im neuen Theme-Modal */
+    .th-pick { width:22px; height:22px; border:1px solid var(--border); border-radius:4px; cursor:pointer; padding:0; flex-shrink:0; outline:none; transition:border-color .14s; }
     .th-pick:hover:not(:disabled) { border-color:var(--muted); }
     .th-pick:disabled { opacity:.4; cursor:default; }
+    .th-row { display: flex; align-items: center; gap: 8px; }
+    .th-hint { font-size: 11px; color: var(--muted); }
     .cp-h { position:absolute;width:1px;height:1px;opacity:0;pointer-events:none; }
     .cp-sm { width:22px;height:22px;border:2px solid var(--border);border-radius:4px;cursor:pointer;padding:0;flex-shrink:0;outline:none;transition:border-color .14s; }
     .cp-sm:hover { border-color:var(--muted); }
@@ -905,13 +940,6 @@
     #cpPreview { width:40px;height:40px;border-radius:8px;border:1px solid var(--border);flex-shrink:0; }
     #cpHexIn { flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;font-size:.88rem;font-family:monospace;outline:none; }
     #cpHexIn:focus { border-color:var(--acc); }
-    .th-preset { width: 34px; height: 34px; border-radius: 6px; cursor: pointer;
-      border: 2px solid transparent; transition: transform .12s, border-color .12s;
-      position: relative; overflow: hidden; flex-shrink: 0; }
-    .th-preset:hover, .th-preset.on { border-color: #fff; transform: scale(1.1); }
-    .th-preset-acc { position: absolute; bottom: 0; right: 0; width: 13px; height: 13px; border-radius: 3px 0 0 0; }
-    .th-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-    .th-hint { font-size: 11px; opacity: 0.65; }
 
     .tab-bar { display: flex; align-items: stretch; gap: 2px; padding: 5px 12px 0;
       background: var(--bg); border-bottom: 1px solid var(--border); flex-shrink: 0;
@@ -1005,13 +1033,8 @@
     .file-card-chip:hover{background:var(--bg3);box-shadow:0 1px 6px rgba(0,0,0,.5);}
     .file-card-chip .fc-chip-lbl{position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);font-size:.44rem;color:var(--muted);white-space:nowrap;max-width:34px;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
     .file-dot{width:9px;height:9px;border-radius:50%;display:inline-block;cursor:pointer;flex-shrink:0;}
-    .m-breadcrumb{font-size:.72rem;color:var(--muted);padding:4px 16px 7px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:4px;position:relative;}
+    .m-breadcrumb{font-size:.72rem;color:var(--muted);padding:4px 16px 7px;display:flex;align-items:center;gap:4px;border-bottom:1px solid var(--border);margin-bottom:4px;position:relative;overflow:hidden;}
     .m-breadcrumb .bc-lnk{color:var(--acc2);cursor:pointer;}.m-breadcrumb .bc-lnk:hover{text-decoration:underline;}
-    .optik-anchor{position:relative;flex-shrink:0;margin-left:auto;}
-    .optik-btn{background:none;border:1px solid var(--border);border-radius:4px;color:var(--muted);cursor:pointer;font-size:.67rem;padding:2px 8px;transition:all .1s;}
-    .optik-btn:hover,.optik-btn.active{background:var(--bg3);border-color:var(--muted);color:var(--text);}
-    .optik-pop{position:absolute;top:calc(100% + 5px);left:0;z-index:60;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:10px;min-width:220px;box-shadow:0 8px 28px rgba(0,0,0,.5);}
-    .optik-pop.hidden{display:none;}
     .m-level-badge{font-size:.6rem;font-weight:700;color:rgba(255,255,255,.55);background:rgba(255,255,255,.1);border-radius:3px;padding:1px 6px;letter-spacing:.06em;flex-shrink:0;}
     .subcard-list{display:flex;flex-direction:column;gap:5px;margin-bottom:7px;}
     .subcard-item{display:flex;align-items:center;gap:9px;padding:8px 11px;background:var(--bg3);border-radius:var(--rs);border:1px solid rgba(255,255,255,.12);cursor:pointer;transition:border-color .12s,background .12s,box-shadow .12s;}
@@ -1537,7 +1560,7 @@
             <div class="md-body mode-edit" id="fcFileBody"><textarea class="notes-ta md-ta" id="fcFile" placeholder="Dateiinhalt…"></textarea><div class="md-prev" id="fcFilePreview"></div></div>
           </div>
           <div>
-            <div class="md-hdr"><div class="slbl" style="margin:0">Notizen</div><div class="md-tabs" id="fcNotesTabs"><button class="md-help-btn" onclick="toggleMdHelp(this)" title="Markdown-Hilfe">?</button><button class="md-tab active" onclick="setMdMode('fcNotes','edit')">Edit</button><button class="md-tab" onclick="setMdMode('fcNotes','split')">Split</button><button class="md-tab" onclick="setMdMode('fcNotes','preview')">View</button></div></div>
+            <div class="md-hdr"><div class="slbl" style="margin:0">Notizen</div><div class="md-tabs" id="fcNotesTabs"><button class="md-help-btn" onclick="toggleMdHelp(this)" title="Markdown-Hilfe">?</button><button class="md-tab active" onclick="setMdMode('fcNotes','edit')">Edit</button><button class="md-tab" onclick="setMdMode('fcNotes','split')">Split</button><button class="md-tab" onclick="setMdMode('fcNotes','preview')">View</button><button class="md-help-btn" onclick="saveNoteAsFileCard('fcNotes')" title="Notiz als Dateikarte speichern" style="margin-left:6px">&#8595;fc</button></div></div>
             <div class="md-body mode-edit" id="fcNotesBody"><textarea class="notes-ta md-ta" id="fcNotes" placeholder="Notizen zur Datei…"></textarea><div class="md-prev" id="fcNotesPreview"></div></div>
           </div>
         </div>
@@ -1564,7 +1587,7 @@
           <!-- Dok-Modus: Template-Ansicht -->
           <div id="docTplArea" style="display:none"></div>
           <div>
-            <div class="md-hdr"><div class="slbl" style="margin:0">Notizen</div><div class="md-tabs" id="mNotesTabs"><button class="md-help-btn" onclick="toggleMdHelp(this)" title="Markdown-Hilfe">?</button><button class="md-tab active" onclick="setMdMode('mNotes','edit')">Edit</button><button class="md-tab" onclick="setMdMode('mNotes','split')">Split</button><button class="md-tab" onclick="setMdMode('mNotes','preview')">View</button></div></div>
+            <div class="md-hdr"><div class="slbl" style="margin:0">Notizen</div><div class="md-tabs" id="mNotesTabs"><button class="md-help-btn" onclick="toggleMdHelp(this)" title="Markdown-Hilfe">?</button><button class="md-tab active" onclick="setMdMode('mNotes','edit')">Edit</button><button class="md-tab" onclick="setMdMode('mNotes','split')">Split</button><button class="md-tab" onclick="setMdMode('mNotes','preview')">View</button><button class="md-help-btn" onclick="saveNoteAsFileCard('mNotes')" title="Notiz als Dateikarte speichern" style="margin-left:6px">&#8595;fc</button></div></div>
             <div class="md-body mode-edit" id="mNotesBody"><textarea class="notes-ta md-ta" id="mNotes" placeholder="Notizen…"></textarea><div class="md-prev" id="mNotesPreview"></div></div>
           </div>
           <div>
@@ -1587,6 +1610,13 @@
           <div id="filesSec">
             <div class="slbl">Dateikarten</div>
             <div class="file-list" id="fileList"></div>
+          </div>
+          <div id="dvSharedSec" style="display:none;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.78rem;color:var(--muted)">
+              <input type="checkbox" id="dvSharedToggle" onchange="setDvShared(this.checked)" style="margin:0;accent-color:var(--acc)">
+              <span>tul-DV freigeben</span>
+            </label>
+            <span id="dvSharedLink" style="display:none;font-size:.7rem;margin-top:3px;color:var(--muted)">→ im tul-Pool</span>
           </div>
           <div id="lnkSec">
             <div class="slbl">Verknüpfte Karten</div>
@@ -1695,7 +1725,7 @@
               <button class="mode-btn" id="docFmtPdf" onclick="_docSetFmt('pdf')">PDF</button>
             </div>
             <div class="slbl">Dateiname (ohne Erweiterung)</div>
-            <input id="docFilename" class="fbar-inp" type="text" placeholder="{{dateiname}}" style="width:100%;font-size:.8rem;box-sizing:border-box;margin-bottom:6px">
+            <input id="docFilename" class="fbar-inp" type="text" placeholder="{{feld}}" style="width:100%;font-size:.8rem;box-sizing:border-box;margin-bottom:6px">
             <div style="border-top:1px solid var(--border);margin:6px 0"></div>
             <div class="slbl">Datenquelle</div>
             <select id="docSrcSel" class="fbar-inp" style="width:100%;font-size:.78rem;margin-bottom:6px"></select>
@@ -1736,6 +1766,21 @@
   </div>
 </div>
 
+<div class="overlay hidden" id="dupConfirmModal">
+  <div class="modal" style="max-width:340px;width:95%">
+    <div class="m-head"><span style="font-size:1rem;font-weight:600;color:var(--text);flex:1">⧉ Duplizieren</span></div>
+    <div style="padding:14px 16px 4px;display:flex;flex-direction:column;gap:14px">
+      <label style="display:flex;align-items:center;gap:9px;font-size:.84rem;cursor:pointer;user-select:none">
+        <input type="checkbox" id="dupWithAtts" checked>
+        <span id="dupAttsLabel">Dateianhänge mitkopieren</span>
+      </label>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding-bottom:14px">
+        <button class="btn" id="dupCancelBtn">Abbrechen</button>
+        <button class="btn pri" id="dupConfirmBtn">Duplizieren</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="overlay hidden" id="copyModal" onclick="if(event.target===this)this.classList.add('hidden')">
   <div class="modal" style="max-width:380px;width:95%">
     <div class="m-head">
@@ -1835,48 +1880,42 @@
   </div>
 </div>
 
-<div class="overlay hidden" id="themeModal" onclick="if(event.target===this)closeThemeModal()">
-  <div class="modal" style="max-width:520px;width:95%;max-height:88vh;display:flex;flex-direction:column">
-    <div class="m-head" style="padding-bottom:10px">
+<!-- Theme-Modal (tul-theme.js Hauptpanel) -->
+<div class="overlay hidden" id="tltThemeModal" onclick="if(event.target===this)closeTltThemeModal()">
+  <div class="modal" id="tltThemeModalBox" style="max-width:400px;width:95%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+    <div class="m-head" style="padding-bottom:8px">
       <span style="font-size:1rem;font-weight:600;color:var(--text);flex:1">🎨 Optik</span>
-      <button class="m-close" onclick="closeThemeModal()">✕</button>
+      <button class="m-close" onclick="closeTltThemeModal()">✕</button>
     </div>
-    <div class="m-body" style="gap:12px;overflow-y:auto;flex:1;min-height:0;padding:5px 10px 10px">
-      <div>
-        <div class="slbl">Schnell-Auswahl</div>
-        <div id="thPresets" style="display:flex;flex-wrap:wrap;gap:7px"></div>
-      </div>
-      <div>
-        <div class="slbl">Grundton <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;opacity:0.65">— dunkle Farbe = Dunkel-Modus</span></div>
-        <div class="th-row">
-          <button class="th-pick" id="thChromeSw" onclick="_cpOpen(this,'thChrome',previewTheme)"></button>
-          <input type="color" id="thChrome" class="cp-h">
-          <span class="th-hint">Hintergrund, Header, Rahmen</span>
-        </div>
-      </div>
-      <div>
-        <div class="slbl">Akzentfarbe</div>
-        <div class="th-row">
-          <button class="th-pick" id="thAccentSw" onclick="_cpOpen(this,'thAccent',previewTheme)"></button>
-          <input type="color" id="thAccent" class="cp-h">
-          <span class="th-hint">Buttons, Highlights, aktive Elemente</span>
-        </div>
-      </div>
+    <div id="tlt-main-slot" style="overflow-y:auto;flex:1;min-height:0"></div>
+    <div id="tlt-mkan-extras" style="padding:0 14px 14px;display:flex;flex-direction:column;gap:10px">
+      <div style="height:1px;background:var(--border);margin:4px 0"></div>
       <div>
         <div class="slbl">Kartenfarbe</div>
         <div class="th-row">
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;user-select:none;white-space:nowrap">
-            <input type="checkbox" id="thUseCard" onchange="previewTheme()"> Eigene Farbe
+            <input type="checkbox" id="thUseCard" onchange="_mkanPreview()"> Eigene Farbe
           </label>
-          <button class="th-pick" id="thCardSw" onclick="_cpOpen(this,'thCard',previewTheme)" disabled></button>
+          <button class="th-pick" id="thCardSw" onclick="_cpOpen(this,'thCard',_mkanPreview)" disabled></button>
           <input type="color" id="thCard" class="cp-h">
+          <span class="th-hint">Standard: aus Grundton abgeleitet</span>
+        </div>
+      </div>
+      <div>
+        <div class="slbl">Spaltenfarbe</div>
+        <div class="th-row">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;user-select:none;white-space:nowrap">
+            <input type="checkbox" id="thUseCol" onchange="_mkanPreview()"> Eigene Farbe
+          </label>
+          <button class="th-pick" id="thColSw" onclick="_cpOpen(this,'thCol',_mkanPreview)" disabled></button>
+          <input type="color" id="thCol" class="cp-h">
           <span class="th-hint">Standard: aus Grundton abgeleitet</span>
         </div>
       </div>
       <div>
         <div class="slbl">Dateikarten-Farbe</div>
         <div class="th-row">
-          <button class="th-pick" id="thFileChipSw" onclick="_cpOpen(this,'thFileChip',previewTheme)"></button>
+          <button class="th-pick" id="thFileChipSw" onclick="_cpOpen(this,'thFileChip',_mkanPreview)"></button>
           <input type="color" id="thFileChip" class="cp-h">
           <span class="th-hint">Hintergrund der Dateikarten auf Karten</span>
         </div>
@@ -1885,7 +1924,7 @@
         <div class="slbl">Dateifarb-Sättigung <span id="thFtSatLbl" style="font-weight:600;text-transform:none;letter-spacing:0"></span></div>
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:10px;opacity:0.5">blass</span>
-          <input type="range" id="thFtSat" min="0" max="100" value="60" oninput="previewTheme()" style="flex:1;accent-color:var(--acc)">
+          <input type="range" id="thFtSat" min="0" max="100" value="60" oninput="_mkanPreview()" style="flex:1;accent-color:var(--acc)">
           <span style="font-size:10px;opacity:0.5">kräftig</span>
         </div>
       </div>
@@ -1893,16 +1932,8 @@
         <div class="slbl">Unterkarten-Chipgröße <span id="thMcHLbl" style="font-weight:600;text-transform:none;letter-spacing:0"></span></div>
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:10px;opacity:0.5">klein</span>
-          <input type="range" id="thMcH" min="42" max="120" step="2" value="60" oninput="previewTheme()" style="flex:1;accent-color:var(--acc)">
+          <input type="range" id="thMcH" min="42" max="120" step="2" value="60" oninput="_mkanPreview()" style="flex:1;accent-color:var(--acc)">
           <span style="font-size:10px;opacity:0.5">groß</span>
-        </div>
-      </div>
-      <div>
-        <div class="slbl">Ebenen-Tiefe <span id="thDclLbl" style="font-weight:600;text-transform:none;letter-spacing:0"></span></div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:10px;opacity:0.5">flach</span>
-          <input type="range" id="thDcl" min="4" max="14" value="7" oninput="previewTheme()" style="flex:1;accent-color:var(--acc)">
-          <span style="font-size:10px;opacity:0.5">tief</span>
         </div>
       </div>
       <div>
@@ -1910,35 +1941,46 @@
         <div style="display:flex;flex-direction:column;gap:8px">
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:.78rem;color:var(--muted);width:130px;flex-shrink:0">Titelbild-Höhe</span>
-            <input type="range" id="covSlider" min="40" max="220" step="10" style="flex:1;accent-color:var(--acc)">
+            <input type="range" id="covSlider" min="40" max="220" step="10" oninput="_mkanPreview()" style="flex:1;accent-color:var(--acc)">
             <span id="covVal" style="font-size:.72rem;color:var(--muted);width:34px;text-align:right">100px</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:.78rem;color:var(--muted);width:130px;flex-shrink:0">1.Spalte – Breite</span>
-            <input type="range" id="lwSlider" min="80" max="300" step="5" style="flex:1;accent-color:var(--acc)">
+            <input type="range" id="lwSlider" min="80" max="300" step="5" oninput="_mkanPreview()" style="flex:1;accent-color:var(--acc)">
             <span id="lwVal" style="font-size:.72rem;color:var(--muted);width:34px;text-align:right">155px</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:.78rem;color:var(--muted);width:130px;flex-shrink:0">Spalten-Breite</span>
-            <input type="range" id="cwSlider" min="150" max="420" step="5" style="flex:1;accent-color:var(--acc)">
+            <input type="range" id="cwSlider" min="150" max="420" step="5" oninput="_mkanPreview()" style="flex:1;accent-color:var(--acc)">
             <span id="cwVal" style="font-size:.72rem;color:var(--muted);width:34px;text-align:right">255px</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:.78rem;color:var(--muted);width:130px;flex-shrink:0">Kartentext-Größe</span>
-            <input type="range" id="fsSlider" min="100" max="130" step="1" oninput="previewTheme()" style="flex:1;accent-color:var(--acc)">
+            <input type="range" id="fsSlider" min="100" max="130" step="1" oninput="_mkanPreview()" style="flex:1;accent-color:var(--acc)">
             <span id="fsVal" style="font-size:.72rem;color:var(--muted);width:34px;text-align:right">100%</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:.78rem;color:var(--muted);width:130px;flex-shrink:0">Unterkarten-Cover</span>
-            <input type="range" id="mcCoverDimSlider" min="50" max="97" step="1" oninput="previewTheme()" style="flex:1;accent-color:var(--acc)">
+            <input type="range" id="mcCoverDimSlider" min="50" max="97" step="1" oninput="_mkanPreview()" style="flex:1;accent-color:var(--acc)">
             <span id="mcCoverDimVal" style="font-size:.72rem;color:var(--muted);width:34px;text-align:right">85%</span>
           </div>
         </div>
       </div>
     </div>
     <div class="m-foot">
-      <button class="btn" onclick="resetTheme()">Zurücksetzen</button>
+      <button class="btn" onclick="_mkanResetTheme()">Zurücksetzen</button>
     </div>
+  </div>
+</div>
+
+<!-- Lab-Modal (tul-theme.js Labor) -->
+<div class="overlay hidden" id="tltLabModal" onclick="if(event.target===this)closeTltLabModal()">
+  <div class="modal" id="tltLabModalBox" style="max-width:400px;width:95%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+    <div class="m-head" style="padding-bottom:8px">
+      <span style="font-size:1rem;font-weight:600;color:var(--text);flex:1">⚗ Labor</span>
+      <button class="m-close" onclick="closeTltLabModal()">✕</button>
+    </div>
+    <div id="tlt-lab-slot" style="overflow-y:auto;flex:1;min-height:0"></div>
   </div>
 </div>
 
@@ -2265,14 +2307,8 @@ const _userColors={}; // userId → custom hex, befüllt aus DB
 function avColor(s){if(_userColors[s])return _userColors[s];let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))&0xff;return AV_COLORS[h%AV_COLORS.length];}
 function initials(name,override){if(override)return override.toUpperCase().slice(0,2);if(!name)return'?';return name.trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);}
 
-let themeChrome = localStorage.getItem('kb_chrome') || '#1f2937';
-let themeAccent = localStorage.getItem('kb_accent') || '#6366f1';
-let themeDcl    = +(localStorage.getItem('kb_dcl')   || 7);
-let themeCard   = localStorage.getItem('kb_card')   || null;
-let themeFontScale = +(localStorage.getItem('kb_fontScale') || 1);
-let fileChipColor = localStorage.getItem('kb_fcchip') || '#1a2744';
-let fileTypeSat = parseInt(localStorage.getItem('kb_fc_sat') || '60');
-let mcCoverDim  = +(localStorage.getItem('kb_mc_cover_dim') || 0.85);
+// themeCard, themeCol, fileChipColor, fileTypeSat, _mcHeight, mcCoverDim, themeFontScale
+// declared in the tul-theme Modal-Integration block below
 
 // ── API ────────────────────────────────────────────────────────
 async function api(method, path, body, apiOpts) {
@@ -2508,7 +2544,7 @@ async function _loadMe() {
 
 // ── Boot ───────────────────────────────────────────────────────
 async function boot() {
-  initTheme();
+  // initTheme() replaced by tulTheme.init() at end of body
   const _resetToken = new URLSearchParams(location.search).get('reset_token');
   if(_resetToken) {
     showLogin();
@@ -2648,8 +2684,7 @@ function renderTabs() {
     let tabBg = '';
     if (!isActive) {
       try {
-        let ch = _boardChromes[b.id];
-        if (!ch) { const ts = localStorage.getItem('kbTheme_'+(ME?.id||'_')+'_'+b.id); ch = (ts ? JSON.parse(ts).chrome : null) || null; }
+        let ch = _boardChromes[b.id] || null;
         if (ch) {
           const [hh,hs,hl] = hexToHsl(ch);
           const s = Math.max(hs, 12);
@@ -2982,6 +3017,8 @@ function openLaneEditModal(laneId) {
   body.appendChild(row);
 
   _laneSep(body);
+  _laneOpBtn(body, 'dv_reset', '○ Alle DV-Freigaben zurücksetzen', laneId);
+  _laneSep(body);
   _laneOpBtn(body, 'attachments_dl',     '⬇ Alle Anhänge herunterladen (ZIP)', laneId);
   _laneOpBtn(body, 'attachments_delete', '🗑 Alle Anhänge löschen', laneId);
   _laneSep(body);
@@ -3020,6 +3057,7 @@ async function laneOp(laneId, op, val) {
     cover:              'Alle Cover-Bilder löschen?',
     table_delete:       'Alle Kartentabellen dauerhaft löschen?',
     notes_delete:       'Alle Kartennotizen unwiderruflich löschen?',
+    dv_reset:           'Alle DV-Freigaben (dv_shared) zurücksetzen?',
   }[op];
   if (confirmMsg && !confirm(`${scopeLabel} · ${cards.length} Karte(n)\n\n${confirmMsg}`)) return;
 
@@ -3061,6 +3099,11 @@ async function laneOp(laneId, op, val) {
         await api('DELETE', '/cards/'+card.id+'/table', undefined, {silentOn:[404]});
       } else if (op === 'notes_delete') {
         if (card.notes) await api('PATCH', '/cards/'+card.id, { notes: '' });
+      } else if (op === 'dv_reset') {
+        if (card.dvShared) {
+          await api('PATCH', '/cards/'+card.id, { dvShared: false });
+          if (S.cards[card.id]) S.cards[card.id].dvShared = false;
+        }
       }
       done++;
     } catch (e) {
@@ -3076,10 +3119,10 @@ async function laneOp(laneId, op, val) {
 // ── Filter ─────────────────────────────────────────────────────
 let F = {text:'', colors:[], labelIds:[], assigneeIds:[], openOnly:false, openPipeline:false, unassigned:false, mode:'', flatMode:0};
 let _unassignedDepth = 2; // 1 | 2 | Infinity
-let _mcHeight = 60; // Unterkarten-Chip-Höhe in px
+// _mcHeight declared in tul-theme Modal-Integration block
 function isFiltered(){return !!(F.text||F.colors.length||F.labelIds.length||F.assigneeIds.length||F.openOnly||F.openPipeline||F.unassigned||F.mode||F.flatMode>0);}
 function cardMatches(c){
-  if(F.text){const q=F.text.toLowerCase();if(!c.title.toLowerCase().includes(q)&&!(c.notes||'').toLowerCase().includes(q))return false;}
+  if(F.text){const q=F.text.toLowerCase();if(!c.title.toLowerCase().includes(q)&&!(c.notes||'').toLowerCase().includes(q)&&!(c.attachments||[]).some(a=>(a.name||'').toLowerCase().includes(q))&&!Object.values(S.cards).some(fc=>fc.parentCardId===c.id&&fc.cardType==='file_card'&&fc.title.toLowerCase().includes(q)))return false;}
   if(F.colors.length&&!F.colors.includes(c.color))return false;
   if(F.labelIds.length&&!F.labelIds.some(id=>(c.labelIds||[]).includes(id)))return false;
   if(F.assigneeIds.length&&!F.assigneeIds.some(id=>(c.assignees||[]).some(a=>a.id===id)))return false;
@@ -3792,7 +3835,7 @@ async function _buildEmailCardView(c,cont){
       const chip=el('span','');
       chip.style.cssText='display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:.72rem;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--muted);user-select:none';
       chip.title=a.name+(a.size?' ('+_fmtBytes(a.size)+')':'');
-      {const _d=a.name.lastIndexOf('.');const _nh=_d>0?`${a.name.slice(0,_d)}<span style="opacity:.28">${a.name.slice(_d)}</span>`:a.name;chip.innerHTML=`<span>${ext}</span><span style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_nh}</span>`;}
+      {const _d=a.name.lastIndexOf('.');const _nm=_d>0?a.name.slice(0,_d):a.name;chip.innerHTML=`<span>${ext}</span><span style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_nm}</span>`;}
       chip.onclick=()=>{
         if(selAtts.has(a.id)){selAtts.delete(a.id);delete selAttsMap[a.id];chip.style.cssText=chip.style.cssText.replace(/background:[^;]+/,'background:var(--bg2)').replace(/color:[^;]+/,'color:var(--muted)').replace(/border-color:[^;]+/,'border-color:var(--border)');}
         else{selAtts.add(a.id);selAttsMap[a.id]=a.name||'?';chip.style.background='var(--acc)';chip.style.color='#fff';chip.style.borderColor='var(--acc)';}
@@ -4220,8 +4263,8 @@ async function _buildDocLinkCardView(c,cont){
   fmtRow.append(fmtDocx,fmtPdf);fmtSec.appendChild(fmtRow);
 
   const fnSec=_dbSec(cont,'Dateiname (ohne Erweiterung)');
-  const fnInp=el('input','');fnInp.type='text';fnInp.placeholder='{{dateiname}}';
-  fnInp.value=cs.filenameTemplate||'';
+  const fnInp=el('input','');fnInp.type='text';fnInp.placeholder='{{feld}}';
+  fnInp.value=(cs.filenameTemplate||'').replace(/\.(docx|doc|pdf|odt|xlsx|ods|pptx|odp)$/i,'');
   fnInp.style.cssText='width:100%;font-size:.75rem;margin-top:3px;padding:3px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);box-sizing:border-box';
   fnSec.appendChild(fnInp);
 
@@ -4451,7 +4494,7 @@ async function _buildSerienLinkCardView(c,cont){
   fmtPdf.onclick=()=>{fmtPdf.classList.add('active');fmtDocx.classList.remove('active');_saveCs();};
 
   const fnSec=_dbSec(dokCol,'Dateiname (ohne Erweiterung)');
-  const fnInp=mkTxtInp('{{dateiname}}',cs.filenameTemplate);
+  const fnInp=mkTxtInp('{{feld}}',(cs.filenameTemplate||'').replace(/\.(docx|doc|pdf|odt|xlsx|ods|pptx|odp)$/i,''));
   fnSec.appendChild(fnInp);
 
   const dokBtnRow=el('div','');dokBtnRow.style.cssText='display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap';
@@ -4559,7 +4602,7 @@ async function _buildSerienLinkCardView(c,cont){
     atts.forEach(a=>{
       const ext=(a.name||'').split('.').pop().toLowerCase();
       const chip=el('span','');chip.style.cssText='display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:.72rem;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--muted);user-select:none';
-      chip.title=a.name;{const _d=a.name.lastIndexOf('.');const _nh=_d>0?`${a.name.slice(0,_d)}<span style="opacity:.28">${a.name.slice(_d)}</span>`:a.name;chip.innerHTML=`<span>${ext}</span><span style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_nh}</span>`;}
+      chip.title=a.name;{const _d=a.name.lastIndexOf('.');const _nm=_d>0?a.name.slice(0,_d):a.name;chip.innerHTML=`<span>${ext}</span><span style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_nm}</span>`;}
       chip.onclick=()=>{if(selAtts.has(a.id)){selAtts.delete(a.id);delete selAttsMap[a.id];chip.style.background='var(--bg2)';chip.style.color='var(--muted)';chip.style.borderColor='var(--border)';}else{selAtts.add(a.id);selAttsMap[a.id]=a.name||'?';chip.style.background='var(--acc)';chip.style.color='#fff';chip.style.borderColor='var(--acc)';}};
       wrap.appendChild(chip);
     });
@@ -6016,7 +6059,7 @@ function openModal(id){
     }
     $('cardBgOn').checked=!!c.bgColor;$('cardBgPick').value=c.bgColor||'#2d3748';
     buildCover(c);buildColors(c.color);buildModalLabels(c);buildPersonSelect(c);buildAssignees(c);buildPts(c);buildST(c);buildLinks(c);
-    buildSubcards(c);buildFiles(c);buildCTable(c);
+    buildSubcards(c);buildFiles(c);buildCTable(c);buildDvShared(c);
     try{buildDueSec(c);buildTimerSec(c);buildAttendanceSec(c);applyModalMode(c);applyColScope(c);}catch(ex){console.error('modal-mode error',ex);}
     if(!isSubcard)buildMove(c);
     $('moveSec').style.display=isSubcard?'none':'';
@@ -6071,8 +6114,7 @@ function closeModalUI() {
       if(pe&&pc)pe.replaceWith(mkCard(pc));
     }
   }
-  // Cleanup Optik-Popover click-outside listener
-  document.querySelector('.optik-anchor')?._cleanup?.();
+  // (Optik-Popover entfernt)
   // Exit fullscreen if active
   if($('mainModal').classList.contains('fullscreen')){
     $('mainModal').classList.remove('fullscreen');
@@ -6625,6 +6667,21 @@ function buildPts(card){
   bWrap.appendChild(fill);sec.appendChild(bWrap);
 }
 
+async function saveNoteAsFileCard(taId){
+  if(!openId)return;
+  const ta=$(taId);
+  const notes=(ta?.value||'').trim();
+  if(!notes){toast('Notiz ist leer');return;}
+  try{
+    const r=await api('POST','/attachments/note-to-filecard/'+openId,{notes});
+    const fresh=await api('GET','/cards/'+r.id);
+    S.cards[r.id]=fresh;
+    buildFiles(S.cards[openId]);
+    refreshParentCard(openId);
+    toast('Dateikarte angelegt');
+  }catch(e){toast('Fehler beim Anlegen der Dateikarte');}
+}
+
 function buildFiles(card){
   const list=$('fileList');list.innerHTML='';
   const _docTplId=(()=>{try{return JSON.parse(card.cardSettings||'{}').templateCardId||null;}catch{return null;}})();
@@ -7005,6 +7062,22 @@ function mkFileItem({name,size,type,isFC,fcId,attId,attUrl,date,onOpen,onDel,onS
   return item;
 }
 
+function buildDvShared(c){
+  const sec=$('dvSharedSec'),toggle=$('dvSharedToggle'),link=$('dvSharedLink');
+  const show=c.cardType==='card';
+  sec.style.display=show?'':'none';
+  if(show){
+    toggle.checked=!!c.dvShared;
+    link.style.display=c.dvShared?'':'none';
+  }
+}
+async function setDvShared(val){
+  if(!openId)return;
+  await api('PATCH','/cards/'+openId,{dvShared:val});
+  if(S.cards[openId])S.cards[openId].dvShared=val;
+  $('dvSharedLink').style.display=val?'':'none';
+}
+
 function buildDueSec(card){
   const inp=$('dueInp');
   inp.value=card.dueDate?card.dueDate.split('T')[0]:'';
@@ -7100,19 +7173,35 @@ function buildAttendanceSec(card){
 
 function buildLinks(card){
   const list=$('lnkList');list.innerHTML='';
-  // intra-board links
-  (card.linkedCards||[]).forEach(lid=>{
+  // intra-board links with drag-to-reorder
+  let _dragIdx=null;
+  (card.linkedCards||[]).forEach((lid,idx)=>{
     const lc=S.cards[lid];if(!lc)return;
     const deep=cardHasDepth(lid)||!!lc.parentCardId;
     const row=el('div','lnk-row'+(F.flatMode>0&&deep?' lnk-row-dim':''));
+    row.draggable=true;
+    row.dataset.linkIdx=idx;
+    row.addEventListener('dragstart',e=>{_dragIdx=idx;e.dataTransfer.effectAllowed='move';setTimeout(()=>row.classList.add('lnk-dragging'),0);});
+    row.addEventListener('dragend',()=>row.classList.remove('lnk-dragging'));
+    row.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';list.querySelectorAll('.lnk-drop-over').forEach(r=>r.classList.remove('lnk-drop-over'));row.classList.add('lnk-drop-over');});
+    row.addEventListener('dragleave',()=>row.classList.remove('lnk-drop-over'));
+    row.addEventListener('drop',e=>{
+      e.preventDefault();e.stopPropagation();row.classList.remove('lnk-drop-over');
+      const toIdx=idx;if(_dragIdx===null||_dragIdx===toIdx)return;
+      const arr=[...card.linkedCards];const[moved]=arr.splice(_dragIdx,1);arr.splice(toIdx,0,moved);
+      card.linkedCards=arr;buildLinks(card);
+      api('PATCH','/cards/'+card.id,{linkedCards:arr}).catch(()=>{});
+    });
+    const dh=el('span','lnk-drag');dh.textContent='⠿';dh.title='Reihenfolge ziehen';
+    dh.addEventListener('mousedown',e=>e.stopPropagation());
     const ct=el('span','lnk-tag');ct.textContent=colOf(lid)?.title||'?';
     const lt=el('span','lnk-tag');lt.textContent=laneOf(lid)?.title||'?';
     const ti=el('span','lnk-title');ti.textContent=lc.title;
     if(F.flatMode>0&&deep){const w=el('span','lnk-deep-warn');w.textContent='tiefer verlinkt';row.appendChild(w);}
     const rm=el('button','lnk-del');rm.innerHTML='✕';
     rm.onclick=async e=>{e.stopPropagation();card.linkedCards=card.linkedCards.filter(x=>x!==lid);if(S.cards[lid])S.cards[lid].linkedCards=(S.cards[lid].linkedCards||[]).filter(x=>x!==card.id);buildLinks(card);await api('PATCH','/cards/'+card.id,{linkedCards:card.linkedCards||[]}).catch(()=>{});};
-    row.onclick=()=>{closeModalUI();openModal(lid);};
-    row.append(ct,lt,ti,rm);list.appendChild(row);
+    row.onclick=e=>{if(e.target===dh||e.target===rm)return;closeModalUI();openModal(lid);};
+    row.append(dh,ct,lt,ti,rm);list.appendChild(row);
   });
   // cross-board links
   api('GET','/cards/'+card.id+'/board-links').then(bls=>{
@@ -7259,6 +7348,7 @@ $('mNotes').oninput=()=>{
     _noteTimer=setTimeout(()=>api('PATCH','/cards/'+openId,{notes:S.cards[openId].notes},{silent401:true}).catch(()=>{}),800);
   }
   if(_mdMode!=='edit')renderMdPreview('mNotes');
+  else{const ta=$('mNotes');ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
 };
 $('fcNotes').oninput=()=>{
   if(openId){
@@ -7267,6 +7357,7 @@ $('fcNotes').oninput=()=>{
     _noteTimer=setTimeout(()=>api('PATCH','/cards/'+openId,{notes:S.cards[openId].notes},{silent401:true}).catch(()=>{}),800);
   }
   if(_mdMode!=='edit')renderMdPreview('fcNotes');
+  else{const ta=$('fcNotes');ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
 };
 
 function applyCardBg(){
@@ -7363,14 +7454,36 @@ $('moveBtn').onclick=async()=>{
 
 async function doDuplicate(linked){
   if(!openId)return;
-  try{
-    const path='/cards/'+openId+'/duplicate'+(linked?'?linked=true':'');
-    const r=await api('POST',path);
-    closeModalUI();
-    await loadBoard(S.id);
-    if(S.cards[r.id])openModal(r.id);
-    toast(linked?'Karte dupliziert + verknüpft':'Karte dupliziert');
-  }catch(e){}
+  const card=S.cards[openId];
+  const attCount=(card?.attachments||[]).length + Object.values(S.cards).filter(c=>c.parentCardId===openId&&c.cardType==='file_card').length;
+
+  async function _execDup(withAtts){
+    try{
+      let path='/cards/'+openId+'/duplicate'+(linked?'?linked=true':'');
+      if(!withAtts)path+=(linked?'&':'?')+'with_attachments=false';
+      const r=await api('POST',path);
+      closeModalUI();await loadBoard(S.id);
+      if(S.cards[r.id])openModal(r.id);
+      toast(linked?'Karte dupliziert + verknüpft':'Karte dupliziert');
+    }catch(e){}
+  }
+
+  if(attCount>0){
+    $('dupAttsLabel').textContent='Dateianhänge mitkopieren ('+attCount+' Datei'+(attCount===1?'':'en')+')';
+    $('dupWithAtts').checked=true;
+    $('dupConfirmModal').classList.remove('hidden');
+    await new Promise(resolve=>{
+      $('dupCancelBtn').onclick=()=>{$('dupConfirmModal').classList.add('hidden');resolve();};
+      $('dupConfirmBtn').onclick=async()=>{
+        const wa=$('dupWithAtts').checked;
+        $('dupConfirmModal').classList.add('hidden');
+        await _execDup(wa);
+        resolve();
+      };
+    });
+  }else{
+    await _execDup(true);
+  }
 }
 $('toCardBtn').onclick=async()=>{
   if(!openId)return;
@@ -7710,179 +7823,183 @@ function _cpSyncSwatches(){
   });
 })();
 
-// ── Theme ──────────────────────────────────────────────────────
-const PRESETS=[
-  {name:'Indigo',  chrome:'#2f3252', accent:'#6366f1'},
-  {name:'Cyan',    chrome:'#334e55', accent:'#06b6d4'},
-  {name:'Emerald', chrome:'#354d42', accent:'#10b981'},
-  {name:'Rose',    chrome:'#483036', accent:'#f43f5e'},
-  {name:'Amber',   chrome:'#544b3f', accent:'#f59e0b'},
-  {name:'Lila',    chrome:'#3c3450', accent:'#a78bfa'},
-];
+// ── tul-theme.js Modal-Integration ─────────────────────────────────────────
 
-function setTheme(t){
-  document.documentElement.classList.add('theme-transition');
-  document.documentElement.setAttribute('data-theme',t);
-  localStorage.setItem('kb_theme',t);
-  setTimeout(()=>document.documentElement.classList.remove('theme-transition'),400);
+let themeCard   = (localStorage.getItem('kb_card')   || '') || null;
+let themeCol    = (localStorage.getItem('kb_col')    || '') || null;
+let fileChipColor = localStorage.getItem('kb_fcchip') || '#1a2744';
+let fileTypeSat = +(localStorage.getItem('kb_fc_sat') || 60);
+let _mcHeight   = +(localStorage.getItem('kb_mc_height') || 60);
+let mcCoverDim  = +(localStorage.getItem('kb_mc_cover_dim') || 0.85);
+let themeFontScale = +(localStorage.getItem('kb_fontScale') || 1);
+
+function _mkanApplyExtras() {
+  const root = document.documentElement.style;
+  const bg3 = getComputedStyle(document.documentElement).getPropertyValue('--bg3').trim();
+  const bg2 = getComputedStyle(document.documentElement).getPropertyValue('--bg2').trim();
+  root.setProperty('--card', themeCard !== null ? themeCard : bg3);
+  root.setProperty('--col',  themeCol  !== null ? themeCol  : bg2);
+  root.setProperty('--fc-chip-color', fileChipColor);
+  root.setProperty('--cardScale', themeFontScale);
+  root.setProperty('--mc-cover-dim', mcCoverDim);
+  document.documentElement.style.setProperty('--mc-height', _mcHeight + 'px');
 }
-function initTheme(){document.documentElement.setAttribute('data-theme',localStorage.getItem('kb_theme')||'dark');}
 
-function applyTheme(){
-  const[ch,cs]=hexToHsl(themeChrome);
-  const[ah,as_,al]=hexToHsl(themeAccent);
-  const root=document.documentElement.style;
-  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
-  const s=Math.max(cs,12);const[,,cl]=hexToHsl(themeChrome);const step=themeDcl;
-  if(isDark){
-    root.setProperty('--bg',hslStr(ch,s,Math.max(cl-step,2)));
-    root.setProperty('--bg2',hslStr(ch,s,cl));
-    root.setProperty('--bg3',hslStr(ch,s,cl+step+4));
-    root.setProperty('--col',hslStr(ch,Math.min(s+3,45),Math.max(cl-step+2,2)));
-    root.setProperty('--card',themeCard!==null?themeCard:hslStr(ch,s,Math.max(cl-step-4,2)));
-    root.setProperty('--border',hslStr(ch,s*0.7,cl+step-2));
-    root.setProperty('--muted',hslStr(ch,s*0.35,60));
-    root.setProperty('--text',hslStr(ch,s*0.1,91));
-  }else{
-    root.setProperty('--bg',hslStr(ch,s*0.1,97));
-    root.setProperty('--bg2',hslStr(ch,s*0.2,94));
-    root.setProperty('--bg3',hslStr(ch,s*0.3,88));
-    root.setProperty('--col',hslStr(ch,s*0.2,90));
-    root.setProperty('--card',themeCard!==null?themeCard:hslStr(ch,0,100));
-    root.setProperty('--border',hslStr(ch,s*0.3,80));
-    root.setProperty('--muted',hslStr(ch,s*0.5,52));
-    root.setProperty('--text',hslStr(ch,s*0.4,15));
+function _mkanPreview() {
+  const useCard = document.getElementById('thUseCard').checked;
+  const useCol  = document.getElementById('thUseCol').checked;
+  themeCard = useCard ? document.getElementById('thCard').value : null;
+  themeCol  = useCol  ? document.getElementById('thCol').value  : null;
+  document.getElementById('thCardSw').disabled = !useCard;
+  document.getElementById('thColSw').disabled  = !useCol;
+  fileChipColor = document.getElementById('thFileChip').value;
+  document.getElementById('thFileChipSw').style.background = fileChipColor;
+  fileTypeSat = +document.getElementById('thFtSat').value;
+  document.getElementById('thFtSatLbl').textContent = fileTypeSat + '%';
+  _mcHeight = +document.getElementById('thMcH').value;
+  document.getElementById('thMcHLbl').textContent = _mcHeight + 'px';
+  themeFontScale = +document.getElementById('fsSlider').value / 100;
+  document.getElementById('fsVal').textContent = document.getElementById('fsSlider').value + '%';
+  mcCoverDim = +document.getElementById('mcCoverDimSlider').value / 100;
+  document.getElementById('mcCoverDimVal').textContent = document.getElementById('mcCoverDimSlider').value + '%';
+  const lw = +document.getElementById('lwSlider').value;
+  const cw = +document.getElementById('cwSlider').value;
+  const covH = +document.getElementById('covSlider').value;
+  document.getElementById('lwVal').textContent  = lw + 'px';
+  document.getElementById('cwVal').textContent  = cw + 'px';
+  document.getElementById('covVal').textContent = covH + 'px';
+  setLW(lw); setCW(cw); setCovH(covH);
+  _mkanApplyExtras();
+}
+
+function _mkanSaveExtras() {
+  localStorage.setItem('kb_card',            themeCard !== null ? themeCard : '');
+  localStorage.setItem('kb_col',             themeCol  !== null ? themeCol  : '');
+  localStorage.setItem('kb_fcchip',          fileChipColor);
+  localStorage.setItem('kb_fc_sat',          fileTypeSat);
+  localStorage.setItem('kb_mc_height',       _mcHeight);
+  localStorage.setItem('kb_mc_cover_dim',    mcCoverDim);
+  localStorage.setItem('kb_fontScale',       themeFontScale);
+  const lw   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--LW'))   || 155;
+  const cw   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--CW'))   || 255;
+  const covH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--covH')) || 100;
+  localStorage.setItem('kb_laneW', lw);
+  localStorage.setItem('kb_colW',  cw);
+  localStorage.setItem('kb_covH',  covH);
+  if (S) {
+    const p = tulTheme.getParams();
+    const extras = { card: themeCard, col: themeCol, fileChipColor, fileTypeSat, mcHeight: _mcHeight, covH, laneW: lw, colW: cw, fontScale: themeFontScale, mcCoverDim };
+    api('PUT', '/boards/' + S.id + '/settings', Object.assign({}, p, extras)).catch(() => {});
   }
-  root.setProperty('--acc',themeAccent);
-  root.setProperty('--acc2',hslStr(ah,Math.max(as_,50),Math.min(al+14,82)));
-  root.setProperty('--cardScale',themeFontScale);
-  root.setProperty('--fc-chip-color',fileChipColor);
-  root.setProperty('--mc-cover-dim',mcCoverDim);
-  root.setProperty('--pl-we-overlay',isDark?'rgba(255,255,255,.13)':'rgba(0,0,0,.08)');
 }
 
-function _applyThemeBlob(s){
-  if(!s||!s.chrome)return false;
-  themeChrome=s.chrome;themeAccent=s.accent||'#6366f1';themeDcl=s.dcl!==undefined?s.dcl:7;themeCard=s.card!==undefined?s.card:null;
-  if(S)_boardChromes[S.id]=themeChrome;
-  if(s.fileChipColor)fileChipColor=s.fileChipColor;
-  if(s.fileTypeSat!==undefined)fileTypeSat=s.fileTypeSat;
-  if(s.mcHeight!==undefined){_mcHeight=Math.max(42,Math.min(120,s.mcHeight));document.documentElement.style.setProperty('--mc-height',_mcHeight+'px');}
-  if(s.mcCoverDim!==undefined)mcCoverDim=s.mcCoverDim;
-  if(s.covH)setCovH(s.covH);if(s.laneW)setLW(s.laneW);if(s.colW)setCW(s.colW);if(s.fontScale)setFontScale(s.fontScale);
-  setTheme(luma(themeChrome)<110?'dark':'light');applyTheme();
-  return true;
-}
-function _boardThemeKey(){return'kbTheme_'+(ME?.id||'_')+'_'+S.id;}
-function applyBoardTheme(){
-  if(!S)return;
-  const cached=localStorage.getItem(_boardThemeKey());
-  if(cached){try{_applyThemeBlob(JSON.parse(cached));}catch(e){}}
-  else applyUserTheme();
-  api('GET','/boards/'+S.id+'/settings').then(s=>{
-    if(!s||!s.chrome)return;
-    localStorage.setItem(_boardThemeKey(),JSON.stringify(s));
-    _applyThemeBlob(s);
-    renderTabs();
-  }).catch(()=>{});
-}
-
-
-function applyUserTheme(){
-  const lsChr=localStorage.getItem('kb_chrome'),lsAcc=localStorage.getItem('kb_accent');
-  const lsDcl=localStorage.getItem('kb_dcl'),lsCard=localStorage.getItem('kb_card');
-  const lsFcc=localStorage.getItem('kb_fcchip');
-  if(lsChr)themeChrome=lsChr;if(lsAcc)themeAccent=lsAcc;if(lsDcl)themeDcl=+lsDcl;themeCard=lsCard||null;if(lsFcc)fileChipColor=lsFcc;
-  const lsFts=localStorage.getItem('kb_fc_sat');if(lsFts!==null)fileTypeSat=parseInt(lsFts);
-  const lsCovH=localStorage.getItem('kb_covH'),lsLW=localStorage.getItem('kb_laneW');
-  const lsCW=localStorage.getItem('kb_colW'),lsFS=localStorage.getItem('kb_fontScale');
-  if(lsCovH)setCovH(+lsCovH);if(lsLW)setLW(+lsLW);if(lsCW)setCW(+lsCW);if(lsFS)setFontScale(+lsFS);
-  setTheme(luma(themeChrome)<110?'dark':'light');applyTheme();
+function openTltThemeModal() {
+  const useCard = themeCard !== null && themeCard !== '';
+  const useCol  = themeCol  !== null && themeCol  !== '';
+  document.getElementById('thUseCard').checked = useCard;
+  document.getElementById('thCard').value = themeCard || '#0f172a';
+  document.getElementById('thCardSw').disabled = !useCard;
+  document.getElementById('thCardSw').style.background = themeCard || '#0f172a';
+  document.getElementById('thUseCol').checked = useCol;
+  document.getElementById('thCol').value = themeCol || '#1e293b';
+  document.getElementById('thColSw').disabled = !useCol;
+  document.getElementById('thColSw').style.background = themeCol || '#1e293b';
+  document.getElementById('thFileChip').value = fileChipColor;
+  document.getElementById('thFileChipSw').style.background = fileChipColor;
+  document.getElementById('thFtSat').value = fileTypeSat;
+  document.getElementById('thFtSatLbl').textContent = fileTypeSat + '%';
+  document.getElementById('thMcH').value = _mcHeight;
+  document.getElementById('thMcHLbl').textContent = _mcHeight + 'px';
+  document.getElementById('fsSlider').value = Math.round(themeFontScale * 100);
+  document.getElementById('fsVal').textContent = Math.round(themeFontScale * 100) + '%';
+  document.getElementById('mcCoverDimSlider').value = Math.round(mcCoverDim * 100);
+  document.getElementById('mcCoverDimVal').textContent = Math.round(mcCoverDim * 100) + '%';
+  const lw   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--LW'))   || 155;
+  const cw   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--CW'))   || 255;
+  const covH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--covH')) || 100;
+  document.getElementById('lwSlider').value  = lw;  document.getElementById('lwVal').textContent  = lw + 'px';
+  document.getElementById('cwSlider').value  = cw;  document.getElementById('cwVal').textContent  = cw + 'px';
+  document.getElementById('covSlider').value = covH; document.getElementById('covVal').textContent = covH + 'px';
+  document.getElementById('tltThemeModal').classList.remove('hidden');
 }
 
-function openThemeModal(){
-  $('thChrome').value=themeChrome;$('thAccent').value=themeAccent;
-  const useCard=themeCard!==null;
-  $('thUseCard').checked=useCard;$('thCard').value=themeCard||'#0f172a';
-  $('thCardSw').disabled=!useCard;
-  $('thFileChip').value=fileChipColor||'#1a2744';
-  $('thFtSat').value=fileTypeSat;$('thFtSatLbl').textContent=fileTypeSat+'%';
-  $('thMcH').value=_mcHeight;$('thMcHLbl').textContent=_mcHeight+'px';
-  $('thDcl').value=themeDcl;$('thDclLbl').textContent=themeDcl;
-  const lw=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--LW'))||155;
-  const cw=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--CW'))||255;
-  const covH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--covH'))||100;
-  $('lwSlider').value=lw;$('lwVal').textContent=lw+'px';
-  $('cwSlider').value=cw;$('cwVal').textContent=cw+'px';
-  $('covSlider').value=covH;$('covVal').textContent=covH+'px';
-  $('fsSlider').value=Math.round(themeFontScale*100);$('fsVal').textContent=Math.round(themeFontScale*100)+'%';
-  $('mcCoverDimSlider').value=Math.round(mcCoverDim*100);$('mcCoverDimVal').textContent=Math.round(mcCoverDim*100)+'%';
-  _cpSyncSwatches();buildThemePresets();$('themeModal').classList.remove('hidden');
-}
-function closeThemeModal(){saveTheme();}
-function previewTheme(){
-  themeChrome=$('thChrome').value;themeAccent=$('thAccent').value;
-  themeDcl=+$('thDcl').value;$('thDclLbl').textContent=themeDcl;
-  const useCard=$('thUseCard').checked;themeCard=useCard?$('thCard').value:null;
-  $('thCardSw').disabled=!useCard;
-  fileChipColor=$('thFileChip').value;
-  fileTypeSat=+$('thFtSat').value;$('thFtSatLbl').textContent=fileTypeSat+'%';
-  _mcHeight=+$('thMcH').value;$('thMcHLbl').textContent=_mcHeight+'px';document.documentElement.style.setProperty('--mc-height',_mcHeight+'px');
-  themeFontScale=+$('fsSlider').value/100;$('fsVal').textContent=$('fsSlider').value+'%';
-  mcCoverDim=+$('mcCoverDimSlider').value/100;$('mcCoverDimVal').textContent=$('mcCoverDimSlider').value+'%';
-  setTheme(luma(themeChrome)<110?'dark':'light');requestAnimationFrame(applyTheme);
-  renderTabs();
-}
-function saveTheme(){
-  localStorage.setItem('kb_chrome',themeChrome);localStorage.setItem('kb_accent',themeAccent);
-  localStorage.setItem('kb_dcl',themeDcl);
-  if(themeCard!==null)localStorage.setItem('kb_card',themeCard);else localStorage.removeItem('kb_card');
-  localStorage.setItem('kb_fcchip',fileChipColor);
-  localStorage.setItem('kb_fc_sat',fileTypeSat);
-  localStorage.setItem('kb_mc_height',_mcHeight);
-  const lw=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--LW'))||155;
-  const cw=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--CW'))||255;
-  const covH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--covH'))||100;
-  localStorage.setItem('kb_laneW',lw);localStorage.setItem('kb_colW',cw);localStorage.setItem('kb_covH',covH);
-  localStorage.setItem('kb_fontScale',themeFontScale);
-  localStorage.setItem('kb_mc_cover_dim',mcCoverDim);
-  const td={chrome:themeChrome,accent:themeAccent,dcl:themeDcl,card:themeCard,fileChipColor,fileTypeSat,mcHeight:_mcHeight,covH,laneW:lw,colW:cw,fontScale:themeFontScale,mcCoverDim};
-  if(S){
-    localStorage.setItem(_boardThemeKey(),JSON.stringify(td));
-    api('PUT','/boards/'+S.id+'/settings',td).catch(()=>{});
-  }
-  $('themeModal').classList.add('hidden');
+function closeTltThemeModal() {
+  _mkanSaveExtras();
+  const box = document.getElementById('tltThemeModalBox');
+  if (box) { box.style.position=''; box.style.width=''; box.style.left=''; box.style.top=''; box.style.right=''; box.style.bottom=''; box.style.margin=''; }
+  document.getElementById('tltThemeModal').classList.add('hidden');
   toast('Optik gespeichert');
-  if(S)_boardChromes[S.id]=themeChrome;
-  renderTabs();if(S)renderBoard();
+  renderTabs(); if (S) renderBoard();
 }
-function resetTheme(){
-  themeChrome='#1f2937';themeAccent='#6366f1';themeDcl=7;themeCard=null;themeFontScale=1;fileChipColor='#1a2744';fileTypeSat=60;mcCoverDim=0.85;_mcHeight=60;document.documentElement.style.setProperty('--mc-height','60px');
-  localStorage.removeItem('kb_chrome');localStorage.removeItem('kb_accent');
-  localStorage.removeItem('kb_dcl');localStorage.removeItem('kb_card');localStorage.removeItem('kb_fontScale');localStorage.removeItem('kb_fcchip');localStorage.removeItem('kb_fc_sat');localStorage.removeItem('kb_mc_cover_dim');localStorage.removeItem('kb_mc_height');
-  if(S){localStorage.removeItem(_boardThemeKey());api('PUT','/boards/'+S.id+'/settings',{}).catch(()=>{});}
-  $('thFileChip').value=fileChipColor;
-  $('thFtSat').value=fileTypeSat;$('thFtSatLbl').textContent=fileTypeSat+'%';
-  $('thMcH').value=60;$('thMcHLbl').textContent='60px';
-  setTheme('dark');applyTheme();
-  $('thChrome').value=themeChrome;$('thAccent').value=themeAccent;
-  $('thDcl').value=themeDcl;$('thDclLbl').textContent=themeDcl;
-  $('thUseCard').checked=false;$('thCard').value='#0f172a';
-  $('thCardSw').disabled=true;
-  $('fsSlider').value=100;$('fsVal').textContent='100%';
-  $('mcCoverDimSlider').value=85;$('mcCoverDimVal').textContent='85%';
+
+function openTltLabModal() {
+  // Panel sicherstellen: sichtbar + nicht kollabiert
+  const panelLab = document.getElementById('tlt-panel-lab');
+  if (panelLab) panelLab.style.display = 'flex';
+  const labBody = document.getElementById('tlt-body-lab');
+  if (labBody) labBody.classList.remove('tlt-collapsed');
+  document.getElementById('tltThemeModal').classList.add('hidden');
+  document.getElementById('tltLabModal').classList.remove('hidden');
 }
-function buildThemePresets(){
-  const wrap=$('thPresets');wrap.innerHTML='';
-  PRESETS.forEach(p=>{
-    const d=el('div','th-preset'+(p.chrome===themeChrome?' on':''));
-    d.style.background=p.chrome;d.title=p.name;
-    const acc=el('div','th-preset-acc');acc.style.background=p.accent;
-    d.appendChild(acc);
-    d.onclick=()=>{themeChrome=p.chrome;themeAccent=p.accent;$('thChrome').value=themeChrome;$('thAccent').value=themeAccent;previewTheme();_cpSyncSwatches();wrap.querySelectorAll('.th-preset').forEach(x=>x.classList.remove('on'));d.classList.add('on');};
-    wrap.appendChild(d);
-  });
+
+function closeTltLabModal() {
+  const box = document.getElementById('tltLabModalBox');
+  if (box) { box.style.position=''; box.style.width=''; box.style.left=''; box.style.top=''; box.style.right=''; box.style.bottom=''; box.style.margin=''; }
+  document.getElementById('tltLabModal').classList.add('hidden');
+  document.getElementById('tltThemeModal').classList.remove('hidden');
 }
+
+function _mkanResetTheme() {
+  themeCard = null; themeCol = null; fileChipColor = '#1a2744'; fileTypeSat = 60;
+  mcCoverDim = 0.85; _mcHeight = 60; themeFontScale = 1;
+  document.documentElement.style.setProperty('--mc-height', '60px');
+  ['kb_card','kb_col','kb_fcchip','kb_fc_sat','kb_mc_cover_dim','kb_mc_height','kb_fontScale',
+   'kb_laneW','kb_colW','kb_covH'].forEach(k => localStorage.removeItem(k));
+  if (S) api('PUT', '/boards/' + S.id + '/settings', {}).catch(() => {});
+  openTltThemeModal();
+  _mkanApplyExtras();
+}
+
+function applyBoardTheme() {
+  if (!S) return;
+  api('GET', '/boards/' + S.id + '/settings').then(s => {
+    if (!s) return;
+    if (s.chrome) {
+      _boardChromes[S.id] = s.chrome;
+      tulTheme.setParams({
+        chrome:     s.chrome,
+        accent:     s.accent     || '#6366f1',
+        dcl:        s.dcl        !== undefined ? s.dcl        : 7,
+        sweetspot:  s.sweetspot  || 110,
+        satScale:   s.satScale   || 1,
+        bg_hue:     s.bg_hue     || 0,
+        bg_sat:     s.bg_sat     || 0,
+        bg_spread:  s.bg_spread  !== undefined ? s.bg_spread  : 7,
+        bg3_hue:    s.bg3_hue    || 0,
+        bg3_sat:    s.bg3_sat    || 0,
+        bg3_spread: s.bg3_spread !== undefined ? s.bg3_spread : 7,
+        text_l:     s.text_l     || 91,
+        text_s:     s.text_s     || 0.15,
+        muted_l:    s.muted_l    || 60,
+        muted_s:    s.muted_s    || 0.35,
+        blur:       s.blur       !== undefined ? s.blur       : 8,
+      });
+    }
+    if (s.card !== undefined)         themeCard = s.card;
+    if (s.col  !== undefined)         themeCol  = s.col;
+    if (s.fileChipColor)              fileChipColor = s.fileChipColor;
+    if (s.fileTypeSat !== undefined)  fileTypeSat = s.fileTypeSat;
+    if (s.mcHeight !== undefined)   { _mcHeight = s.mcHeight; document.documentElement.style.setProperty('--mc-height', _mcHeight + 'px'); }
+    if (s.mcCoverDim !== undefined)   mcCoverDim = s.mcCoverDim;
+    if (s.covH)    setCovH(s.covH);
+    if (s.laneW)   setLW(s.laneW);
+    if (s.colW)    setCW(s.colW);
+    if (s.fontScale) setFontScale(s.fontScale);
+    _mkanApplyExtras();
+    renderTabs();
+  }).catch(() => {});
+}
+
 function setCovH(px){document.documentElement.style.setProperty('--covH',px+'px');const s=$('covSlider');if(s){s.value=px;$('covVal').textContent=px+'px';}}
 function setLW(px){document.documentElement.style.setProperty('--LW',px+'px');const s=$('lwSlider');if(s){s.value=px;$('lwVal').textContent=px+'px';}}
 function setCW(px){document.documentElement.style.setProperty('--CW',px+'px');const s=$('cwSlider');if(s){s.value=px;$('cwVal').textContent=px+'px';}}
@@ -8691,48 +8808,21 @@ function buildBreadcrumb(card){
     });
     const self=el('span','');self.style.color='var(--text)';self.textContent=card.title;bc.appendChild(self);
   }
-  // Optik-Popover (Farbe, Eigene Kartenfarbe, Labels) — immer, auch für file_card
+  // Farbe & Eigene Kartenfarbe — inline ohne Popover
   {
-    const anchor=el('div','optik-anchor');
-    const obtn=el('button','optik-btn');obtn.textContent='🎨 Optik';
-    const pop=el('div','optik-pop hidden');pop.id='optikPop';
-
-    // Farbe
-    const farbeLbl=el('div','slbl');farbeLbl.textContent='Farbe';
     const colorRow=el('div','color-row');colorRow.id='colorRow';
-    const bgRow=el('div','');bgRow.style.cssText='display:flex;align-items:center;gap:8px;margin-top:4px';
+    const bgRow=el('div','');bgRow.style.cssText='display:flex;align-items:center;gap:6px';
     const bgOn=el('input','');bgOn.type='checkbox';bgOn.id='cardBgOn';bgOn.style.cssText='accent-color:var(--acc);width:14px;height:14px;flex-shrink:0';
     bgOn.onchange=applyCardBg;
-    const bgSpan=el('span','');bgSpan.style.cssText='font-size:.76rem;color:var(--muted)';bgSpan.textContent='Eigene Kartenfarbe';
+    const bgSpan=el('span','');bgSpan.style.cssText='font-size:.72rem;color:var(--muted)';bgSpan.textContent='Karte';
     const bgPick=el('input','cp-h');bgPick.type='color';bgPick.id='cardBgPick';
     bgPick.value=card.bgColor||'#2d3748';
     const bgSw=el('button','cp-sm');bgSw.style.background=bgPick.value;
     bgSw.onclick=ev=>{ev.stopPropagation();openColorPicker(bgSw,bgPick.value,hex=>{bgPick.value=hex;bgSw.style.background=hex;if(bgOn.checked)applyCardBg();});};
     bgRow.append(bgOn,bgSpan,bgSw,bgPick);
-    const farSec=el('div','');farSec.append(farbeLbl,colorRow,bgRow);
-
-    pop.append(farSec);
-
-    obtn.onclick=ev=>{
-      ev.stopPropagation();
-      const open=!pop.classList.contains('hidden');
-      pop.classList.toggle('hidden',open);
-      obtn.classList.toggle('active',!open);
-      if(!open&&openId){buildColors(S.cards[openId]?.color);}
-    };
-    anchor.append(obtn,pop);
-    bc.appendChild(anchor);
-
-    // Click-outside schließt Popover; Klicks im Color-Picker ignorieren (außerhalb des anchor, aber gehört dazu)
-    const closeOptik=ev=>{
-      const cp=$('colorPicker');
-      if(anchor.contains(ev.target))return;
-      if(cp&&!cp.classList.contains('hidden')&&cp.contains(ev.target))return;
-      pop.classList.add('hidden');obtn.classList.remove('active');
-    };
-    document.addEventListener('click',closeOptik,{once:false});
-    // Cleanup wenn Breadcrumb neu gebaut wird
-    anchor._cleanup=()=>document.removeEventListener('click',closeOptik);
+    const wrap=el('div','');wrap.style.cssText='display:flex;align-items:center;gap:8px;flex-shrink:0';
+    wrap.append(colorRow,bgRow);
+    bc.appendChild(wrap);
   }
 
   // Mode-Toggle rechts (nur für normale Karten, nicht file_card, nicht DB-Karten)
@@ -8864,7 +8954,7 @@ function buildSubcards(card){
     const del=el('button','btn dng');del.style.cssText='padding:2px 7px;font-size:.7rem;margin-left:4px;';del.textContent='✕';
     del.onclick=async e=>{e.stopPropagation();if(!confirm('Unterkarte "'+ch.title+'" löschen?'))return;await api('DELETE','/cards/'+ch.id);delete S.cards[ch.id];buildSubcards(card);refreshParentCard(card.id);};
     item.append(handle,bar,ti,meta,del);
-    item.onclick=e=>{if(e.target===del||e.target===handle)return;closeModalUI();drillInto(ch.id);};
+    item.onclick=e=>{if(e.target===del||e.target===handle)return;if(e.altKey){e.preventDefault();closeModalUI();openModalFull(ch.id);}else if(e.shiftKey){closeModalUI();openModal(ch.id);}else{closeModalUI();drillInto(ch.id);}};
     item.addEventListener('dragstart',ev=>{_scDragSrc=ch.id;item.classList.add('sc-dragging');ev.dataTransfer.effectAllowed='move';ev.dataTransfer.setData('scid',ch.id);});
     item.addEventListener('dragend',()=>{item.classList.remove('sc-dragging');list.querySelectorAll('.drop-line').forEach(l=>l.remove());});
     list.appendChild(item);
@@ -9277,8 +9367,7 @@ async function plannerLoad(){
   }));
   const parked=new Set(JSON.parse(localStorage.getItem('kb_tabs_parked')||'[]'));
   _plDueDates=dues.filter(d=>!parked.has(d.boardId)).map(d=>{
-    let accent='#6b7280';
-    try{const ts=localStorage.getItem('kbTheme_'+(ME?.id||'_')+'_'+d.boardId);accent=(ts?JSON.parse(ts).accent:null)||'#6b7280';}catch(e){}
+    let accent = _boardChromes[d.boardId] || '#6b7280';
     return{...d,boardColor:accent};
   });
   // Build user list
@@ -10074,7 +10163,7 @@ function setMdMode(taId,mode){
     const h=body.offsetHeight;
     body.className='md-body mode-'+mode;
     if(mode==='split'||mode==='preview'){body.style.height=h+'px';}
-    else{body.style.height='';}
+    else{body.style.height='';const ta=body.querySelector('.md-ta');if(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}}
   }
   const tabs=$(taId+'Tabs');
   if(tabs)tabs.querySelectorAll('.md-tab').forEach((t,i)=>t.classList.toggle('active',['edit','split','preview'][i]===mode));
@@ -12169,7 +12258,7 @@ async function _initDocSec(card){
 
   // Dateiname
   const fnInp=$('docFilename');
-  fnInp.value=cs.filenameTemplate||'';
+  fnInp.value=(cs.filenameTemplate||'').replace(/\.(docx|doc|pdf|odt|xlsx|ods|pptx|odp)$/i,'');
   fnInp.oninput=()=>_docSaveCs(card,{filenameTemplate:fnInp.value});
 
   // Datenquellen-Selektor
@@ -13081,10 +13170,8 @@ _buildHelpGrid();
 $('btnKBLane').onclick=toggleKBLane;
 $('snapNote').onkeydown=e=>{if(e.key==='Enter')doCreateSnapshot();};
 
-$('covSlider').oninput=e=>{setCovH(+e.target.value);};
-$('lwSlider').oninput=e=>{setLW(+e.target.value);};
-$('cwSlider').oninput=e=>{setCW(+e.target.value);};
-$('btnTheme').onclick=openThemeModal;
+// covSlider/lwSlider/cwSlider oninput handled via _mkanPreview() in new modal
+$('btnTheme').onclick=openTltThemeModal;
 
 boot();
 </script>
@@ -13354,5 +13441,75 @@ boot();
     <input id="cpHexIn" maxlength="7" spellcheck="false" placeholder="#000000">
   </div>
 </div>
+<script src="/static/tul-theme.js"></script>
+<script>
+(function() {
+  tulTheme.init({
+    subpath: '',
+    preset: { chrome: '#1f2937', accent: '#6366f1' },
+    onSave: function(params) {
+      if (typeof S !== 'undefined' && S) {
+        const extras = {
+          card: typeof themeCard !== 'undefined' ? themeCard : null,
+          col:  typeof themeCol  !== 'undefined' ? themeCol  : null,
+          fileChipColor: typeof fileChipColor !== 'undefined' ? fileChipColor : '#1a2744',
+          fileTypeSat:   typeof fileTypeSat   !== 'undefined' ? fileTypeSat   : 60,
+        };
+        if (typeof api === 'function') {
+          api('PUT', '/boards/' + S.id + '/settings', Object.assign({}, params, extras)).catch(function(){});
+        }
+      }
+      if (typeof _mkanApplyExtras === 'function') _mkanApplyExtras();
+    },
+  });
+  // Panels in Modals verschieben
+  const mainSlot  = document.getElementById('tlt-main-slot');
+  const labSlot   = document.getElementById('tlt-lab-slot');
+  const panelMain = document.getElementById('tlt-panel-main');
+  const panelLab  = document.getElementById('tlt-panel-lab');
+  if (mainSlot  && panelMain) mainSlot.appendChild(panelMain);
+  if (labSlot   && panelLab)  labSlot.appendChild(panelLab);
+  // Lab-Button: tul-theme.js addEventListener entfernen via Clone, dann eigenen handler
+  const oldBtnLab = document.getElementById('tlt-btn-lab');
+  if (oldBtnLab) {
+    const newBtnLab = oldBtnLab.cloneNode(true);
+    oldBtnLab.parentNode.replaceChild(newBtnLab, oldBtnLab);
+    newBtnLab.addEventListener('click', function() { openTltLabModal(); });
+  }
+
+  // Drag-Logik für Theme- und Lab-Modal
+  (function() {
+    let _drag = null;
+    function enableDrag(overlayId, boxId) {
+      const overlay = document.getElementById(overlayId);
+      const box     = document.getElementById(boxId);
+      if (!overlay || !box) return;
+      const head = box.querySelector('.m-head');
+      if (!head) return;
+      head.addEventListener('mousedown', function(e) {
+        if (e.target.closest('.m-close')) return;
+        const r = box.getBoundingClientRect();
+        box.style.position = 'fixed';
+        box.style.width  = r.width  + 'px';
+        box.style.left   = r.left   + 'px';
+        box.style.top    = r.top    + 'px';
+        box.style.right  = 'auto';
+        box.style.bottom = 'auto';
+        box.style.margin = '0';
+        _drag = { box, ox: e.clientX - r.left, oy: e.clientY - r.top };
+        e.preventDefault();
+      });
+    }
+    document.addEventListener('mousemove', function(e) {
+      if (!_drag) return;
+      _drag.box.style.left = (e.clientX - _drag.ox) + 'px';
+      _drag.box.style.top  = (e.clientY - _drag.oy) + 'px';
+    });
+    document.addEventListener('mouseup', function() { _drag = null; });
+    enableDrag('tltThemeModal', 'tltThemeModalBox');
+    enableDrag('tltLabModal',   'tltLabModalBox');
+  })();
+})();
+</script>
 </body>
 </html>

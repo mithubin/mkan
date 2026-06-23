@@ -124,6 +124,7 @@ def _migrate_db():
           created_at     TEXT DEFAULT (datetime('now'))
         )""",
         "ALTER TABLE users ADD COLUMN badge_color TEXT",
+        "ALTER TABLE cards ADD COLUMN dv_shared INTEGER NOT NULL DEFAULT 0",
     ]
     with get_conn() as conn:
         for sql in alters:

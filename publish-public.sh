@@ -8,6 +8,7 @@ echo "=== mkan public sync ==="
 
 # Alle tracked files kopieren (außer userdata) — IFS+read -r -d '' für Sonderzeichen in Namen
 git -C "$SRC" ls-files -z | grep -zv "^trel_sv userdata.md$" | while IFS= read -r -d '' f; do
+  [ -f "$SRC/$f" ] || continue
   mkdir -p "$PUB/$(dirname "$f")"
   cp "$SRC/$f" "$PUB/$f"
 done

@@ -5,8 +5,7 @@ Live: `https://mkan.milan.how/`
 ## Struktur
 - `server/` – FastAPI-Backend (Python 3.12, SQLite, uvicorn)
   - `routers/` – auth, boards, cards, columns, swimlanes, labels, attachments, events, persons, snapshots, klassenbuch
-  - `static/index.html` – Frontend (=multikanban-server.html, wird via GET / ausgeliefert)
-- `multikanban-server.html` – Quell-Datei des Frontends (nach `server/static/index.html` kopieren + deployen)
+  - `static/index.html` – **Einzige Frontend-Quelle** (direkt editiert, via `GET /` ausgeliefert)
 - `data/` – Laufzeitdaten (gitignore), auf NUC: Docker-Volume unter `/mnt/mkan/`
 
 ## Stack
@@ -17,15 +16,28 @@ Live: `https://mkan.milan.how/`
 - OnlyOffice 9.4: hinter `https://onlo.milan.how/`, DDNS auf NUC-IP
 
 ## Deploy-Prozess
+
+Workflow: `server/static/index.html` direkt editieren → committen → deployen.
+
 ```bash
-# lokal
-cp multikanban-server.html server/static/index.html
+# 1. committen (nur geänderte Dateien angeben, nie -A)
+git add server/static/index.html   # ggf. weitere Dateien
+git commit -m "mkan: ..."
+
+# 2. deployen — entweder deploy.sh (empfohlen):
+bash deploy.sh
+
+# oder manuell:
 tar czf /tmp/mkan-deploy.tar.gz server/ docker-compose.yml deploy-mkan.sh
 scp /tmp/mkan-deploy.tar.gz user@yourserver:/tmp/
-
-# auf NUC
-ssh user@yourserver "cd /tmp && rm -rf mkan-server && mkdir mkan-server && tar xzf mkan-deploy.tar.gz -C mkan-server && bash mkan-server/deploy-mkan.sh"
+ssh user@yourserver 'bash -s' << 'REMOTE'
+cd /tmp && rm -rf mkan-server && mkdir mkan-server
+tar xzf mkan-deploy.tar.gz -C mkan-server
+bash mkan-server/deploy-mkan.sh
+REMOTE
 ```
+
+**Hinweis:** `multikanban-server.html` im Projektwurzel ist ein veraltetes Relikt — nicht verwenden. `deploy.sh` kopiert sie nicht mehr nach `server/static/index.html`.
 
 ## Public-Repo (GitHub)
 `../mkan-public/` — bereinigter Spiegel ohne History, ohne sensitive Daten.
@@ -90,6 +102,8 @@ Zero-Knowledge inkompatibel mit serverseitiger Verarbeitung (OO, DAV, Seriendruc
 
 ### WebDAV entfernen + Python-Desktop-Bridge
 WebDAV ist unpraktisch (schwerfälliger Zugriff, gvfs rendert Vorschauen statt Dateien zu öffnen). Geplanter Ersatz: Python-Bridge-Skript (lokal, öffnet Dateien direkt aus mkan via OS-Default-App). Entfernen wenn Bridge steht: `server/routers/dav.py` + Import/Mount in `main.py` (`get_dav_app`, `/dav`-Route) + `wsgidav` aus `requirements.txt`.
+
+### kleines feature-update: direktes Modal-Öffnen aus Unterkarten-Chip im Elternmodal
 
 ## OnlyOffice-Konfiguration (NUC)
 - OO läuft als Docker-Service `onlyoffice` hinter nginx → `https://onlo.milan.how/`
@@ -286,10 +300,11 @@ Board-Karte: Gradient-Overlay (`.card-att-overlay`) — abdunkelt abwesende Segm
 ## Modal-Layout
 
 - `.modal` max-width 1220px; `.m-side` 440px
-- **Zeile 1** (`#mBreadcrumb`): Level-Badge + Pfad + Optik-Button (Farbe, Hintergrundbild) + Mode-Toggle-Buttons
+- **Zeile 1** (`#mBreadcrumb`): Level-Badge + Pfad + Mode-Toggle-Buttons
 - **Zeile 2** (`#mMetaRow`): Labels links (`.m-meta-lbl`, flex-wrap) + Zugewiesen rechts (`.m-meta-asgn`, 440px, 22px-Avatare) — für alle Modi sichtbar
+- **Zeile 3** (`#mColorRowWrap`, `.m-color-row-sect`): Farbzeile — `#colorRow` (Trello-Streifen-Farbe) + Karten-Hintergrundfarbe. Wird in `buildBreadcrumb()` befüllt.
 - **Rechte Sidebar (m-side)** von oben: Fälligkeit → Zeiterfassung → Titelbild → Person → Punkte → Anwesenheit → Karte verschieben
-- Kartenfuß: Mode-Icon + Due-Date-Badge + klickbares Erstelldatum (öffnet `<input type="date">` → PATCH `createdAt`)
+- Kartenfuß (`.card-footer`, 3 Zonen): **links** Mode-Icon + Hochkant-Balken je Unterkarte (`.sc-bar`, 3×9px, Kartenfarbe) | **mitte** Due-Date-Badge | **rechts** klickbares Erstelldatum (öffnet `<input type="date">` → PATCH `createdAt`)
 - **Kein Speichern-Button** — alles Auto-Save; `dbSaveBtn` vollständig entfernt
 
 ### Meta-Zeile
@@ -357,10 +372,10 @@ Kritische Fallstricke:
 Einschränkungen: nur bestehende Anhänge editierbar; kein Role-Check auf DAV-Ebene; kein CREATE/DELETE/RENAME via DAV.
 
 ### Optik-Menü
-`buildBreadcrumb()` erzeugt `#colorRow`, `#cardBgOn`, `#cardBgPick` dynamisch — existieren nur wenn Modal offen ist.
+`buildBreadcrumb()` erzeugt `#colorRow`, `#cardBgOn`, `#cardBgPick` dynamisch und befüllt damit `#mColorRowWrap` — diese Elemente existieren nur wenn das Modal offen ist.
 **Kritisch**: Handler dürfen NICHT auf Modulebene auf diese IDs zugreifen (Element existiert dann nicht → crash).
 `closeOptik` ignoriert Klicks in `#colorPicker` (fixed-positioned, außerhalb anchor-DOM).
-Optik-Popup enthält nur Farbe + Hintergrundbild — Labels sind in `#mMetaRow`.
+Farbzeile sitzt in `#mColorRowWrap` (Zeile 3 des Modals, unterhalb Labels) — nicht im Breadcrumb.
 
 ### Filter – Ohne Zuweisung + Tiefe
 `F.unassigned` (boolean) + `_unassignedDepth` (1 | 2 | Infinity, default 2) steuern den "Ohne Zuweisung"-Filter.
@@ -470,7 +485,7 @@ OO-Features (Dokument-Edit, Seriendok) nicht verfügbar ohne laufende OO-Instanz
 - Level-Badge (I/II/III): in `mkCard()` immer gesetzt, position:absolute top/right
 - Modal: `_notesEl(c)` → `$('fcNotes')` für file_cards, `$('mNotes')` für alle anderen
 - `#fcFile` / `#fcFileBody` / `#fcFileTabs` / `#fcFileEditor`: Inline-Editor für TXT/MD-Anhänge im fc-modal; `saveFcFile()` für PUT-Upload
-- Breadcrumb (`mBreadcrumb`): Level-Badge + Pfad + Optik-Button + Mode-Toggle-Buttons via `buildBreadcrumb(card)`
+- Breadcrumb (`mBreadcrumb`): Level-Badge + Pfad + Mode-Toggle-Buttons via `buildBreadcrumb(card)`. Farbzeile landet in `#mColorRowWrap` (Zeile darunter), nicht im Breadcrumb.
 - Enter in `mTitle` → `closeModal()` (kein Zeilenumbruch)
 - Upload in `buildFiles()`: POST `/cards` mit `cardType:'file_card'` + POST `/attachments/cards/{id}`
 - `mkFileItem` Signatur: `{name, size, type, isFC, fcId, attId, attUrl, date, onOpen, onDel, onSetCover, onMove, onCopy, srcCardId, draggable}`

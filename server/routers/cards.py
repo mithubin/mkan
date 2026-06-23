@@ -45,6 +45,7 @@ class CardUpdate(BaseModel):
     coverPos: str | None = None
     assigneeIds: list[str] | None = None
     cardSettings: str | None = None
+    dvShared: bool | None = None
 
 
 class SubtaskCreate(BaseModel):
@@ -177,6 +178,7 @@ def get_card(card_id: str, user_id: str = Depends(current_user_id)):
         'attendanceData': c['attendance_data'] if 'attendance_data' in keys else None,
         'coverPos': c['cover_pos'] if 'cover_pos' in keys else None,
         'cardSettings': c['card_settings'] if 'card_settings' in keys else None,
+        'dvShared': bool(c['dv_shared']) if 'dv_shared' in keys else False,
         'updatedAt': c['updated_at'],
     }
 
@@ -233,6 +235,8 @@ def update_card(card_id: str, body: CardUpdate, user_id: str = Depends(current_u
             updates['cover_pos'] = body.coverPos or None
         if 'cardSettings' in provided:
             updates['card_settings'] = body.cardSettings
+        if 'dvShared' in provided and body.dvShared is not None:
+            updates['dv_shared'] = int(body.dvShared)
         if 'assigneeIds' in provided and body.assigneeIds is not None:
             conn.execute('DELETE FROM card_assignees WHERE card_id=?', (card_id,))
             for uid_val in body.assigneeIds:
@@ -475,6 +479,13 @@ def duplicate_card(card_id: str, linked: bool = False, with_attachments: bool = 
                 )
                 new_atts.append({'id': new_att_id, 'name': att['filename'], 'size': att['size'], 'type': att['mime'],
                                  'url': f'/attachments/{new_att_id}/file'})
+
+        # Copy file_card children (files uploaded as child cards)
+        if with_attachments:
+            for child in conn.execute(
+                'SELECT id FROM cards WHERE parent_card_id=? ORDER BY position', (card_id,)
+            ).fetchall():
+                _copy_card_recursive(conn, child['id'], src['board_id'], src['col_id'], src['lane_id'], new_id, ts)
 
         if linked:
             a, b = (card_id, new_id) if card_id < new_id else (new_id, card_id)

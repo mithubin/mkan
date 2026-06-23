@@ -1,11 +1,9 @@
 #!/bin/bash
-# Lokaler Deploy-Script: Frontend kopieren, paketieren, hochladen, NUC-Deploy starten.
+# Lokaler Deploy-Script: paketieren, hochladen, NUC-Deploy starten.
+# Quelle: server/static/index.html (direkt editiert + per git geführt).
 # Live-Output via SSH-Heredoc (kein Buffering).
 set -e
 cd "$(dirname "$0")"
-
-echo "→ Frontend kopieren"
-cp multikanban-server.html server/static/index.html
 
 echo "→ Paket bauen"
 tar czf /tmp/mkan-deploy.tar.gz server/ docker-compose.yml deploy-mkan.sh

@@ -3,7 +3,7 @@ import re
 import tarfile
 import tempfile
 import zipfile
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -642,3 +642,164 @@ def move_attachment(att_id: str, body: MoveAttachmentIn, user_id: str = Depends(
     broadcast(old_board_id, {'type': 'card_updated', 'userId': user_id, 'id': old_card_id, 'boardId': old_board_id})
     broadcast(old_board_id, {'type': 'card_updated', 'userId': user_id, 'id': body.card_id, 'boardId': old_board_id})
     return {'ok': True}
+
+
+class NoteToFilecardIn(BaseModel):
+    notes: str = ''
+
+
+@router.post('/note-to-filecard/{card_id}', status_code=201)
+def note_to_filecard(card_id: str, body: NoteToFilecardIn, user_id: str = Depends(current_user_id)):
+    import mimetypes as _mt
+    from datetime import datetime
+    notes = body.notes.strip()
+    if not notes:
+        raise HTTPException(400, 'Notiz ist leer')
+    with get_conn() as conn:
+        c = conn.execute('SELECT board_id, col_id, lane_id FROM cards WHERE id=?', (card_id,)).fetchone()
+        if not c:
+            raise HTTPException(404, 'Card not found')
+        require_board_access(c['board_id'], user_id, conn)
+        board_id, col_id, lane_id = c['board_id'], c['col_id'], c['lane_id']
+        pos = (conn.execute(
+            'SELECT COALESCE(MAX(position),-1) AS m FROM cards WHERE parent_card_id=?', (card_id,)
+        ).fetchone()['m'] or -1) + 1
+
+    ts = now()
+    fname = 'notiz vom ' + datetime.now().strftime('%Y-%m-%d %H:%M') + '.md'
+    fc_id = uid()
+    att_id = uid()
+
+    with get_conn() as conn:
+        conn.execute(
+            '''INSERT INTO cards (id, board_id, col_id, lane_id, position, title, notes,
+               color, bg_color, cover_path, points, points_max,
+               card_type, parent_card_id, card_mode, time_spent, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            (fc_id, board_id, col_id, lane_id, pos,
+             fname, '', None, None, None, 0, None, 'file_card', card_id, 'org', 0, ts, ts),
+        )
+
+    card_dir = os.path.join(UPLOAD_PATH, fc_id)
+    os.makedirs(card_dir, exist_ok=True)
+    safe_name = _safe_filename(fname)
+    fpath = os.path.join(card_dir, f'{att_id}_{safe_name}')
+    content = notes.encode('utf-8')
+    with open(fpath, 'wb') as f:
+        f.write(content)
+
+    with get_conn() as conn:
+        conn.execute(
+            'INSERT INTO attachments (id, card_id, filename, path, size, mime, created_at) VALUES (?,?,?,?,?,?,?)',
+            (att_id, fc_id, fname, fpath, len(content), 'text/markdown', ts),
+        )
+
+    broadcast(board_id, {'type': 'card_updated', 'userId': user_id, 'id': card_id, 'boardId': board_id})
+    return {'id': fc_id}
+
+
+# ── tul-DV Bridge (inter-service, X-Tul-Secret auth) ─────────────────────────
+
+def _check_tul_secret(request: Request):
+    secret = os.environ.get('TUL_SECRET', '')
+    if not secret:
+        raise HTTPException(503, 'TUL_SECRET not configured')
+    if request.headers.get('X-Tul-Secret', '') != secret:
+        raise HTTPException(401, 'Unauthorized')
+
+
+@router.get('/dv/card/{card_id}')
+def dv_card_files(card_id: str, request: Request):
+    _check_tul_secret(request)
+    with get_conn() as conn:
+        card = conn.execute('SELECT id, title, dv_shared FROM cards WHERE id=?', (card_id,)).fetchone()
+        if not card:
+            raise HTTPException(404, 'Card not found')
+        if not card['dv_shared']:
+            raise HTTPException(403, 'DV sharing not enabled for this card')
+        atts = conn.execute(
+            'SELECT id, filename, size, mime FROM attachments WHERE card_id=? ORDER BY position, created_at',
+            (card_id,),
+        ).fetchall()
+        fc_ids = [r['id'] for r in conn.execute(
+            "SELECT id FROM cards WHERE parent_card_id=? AND card_type='file_card'", (card_id,),
+        ).fetchall()]
+        fc_atts = []
+        for fcid in fc_ids:
+            for r in conn.execute(
+                'SELECT id, filename, size, mime FROM attachments WHERE card_id=?', (fcid,),
+            ).fetchall():
+                fc_atts.append(r)
+    return {
+        'card_id': card_id,
+        'title': card['title'],
+        'files': [
+            {'id': a['id'], 'name': a['filename'], 'size': a['size'], 'mime': a['mime'] or ''}
+            for a in list(atts) + fc_atts
+        ],
+    }
+
+
+@router.get('/dv/file/{att_id}')
+def dv_file(att_id: str, request: Request):
+    _check_tul_secret(request)
+    import mimetypes as _mt
+    with get_conn() as conn:
+        att = conn.execute(
+            'SELECT a.*, c.dv_shared FROM attachments a JOIN cards c ON a.card_id=c.id WHERE a.id=?',
+            (att_id,),
+        ).fetchone()
+        if not att:
+            raise HTTPException(404, 'Attachment not found')
+        if not att['dv_shared']:
+            # Check if it's a file_card attachment whose parent is dv_shared
+            att = conn.execute(
+                '''SELECT a.*, pc.dv_shared
+                   FROM attachments a
+                   JOIN cards c ON a.card_id=c.id
+                   JOIN cards pc ON c.parent_card_id=pc.id
+                   WHERE a.id=? AND c.card_type='file_card' AND pc.dv_shared=1''',
+                (att_id,),
+            ).fetchone()
+            if not att:
+                raise HTTPException(403, 'DV sharing not enabled')
+    if not os.path.exists(att['path']):
+        raise HTTPException(404, 'File missing on disk')
+    mime = att['mime'] or _mt.guess_type(att['filename'])[0] or 'application/octet-stream'
+    return FileResponse(att['path'], filename=att['filename'], media_type=mime)
+
+
+@router.get('/dv/pool')
+def dv_pool(request: Request):
+    _check_tul_secret(request)
+    with get_conn() as conn:
+        cards = conn.execute(
+            "SELECT id, title FROM cards WHERE dv_shared=1 AND card_type='card' ORDER BY title"
+        ).fetchall()
+        result = []
+        for card in cards:
+            atts = conn.execute(
+                'SELECT id, filename, size, mime FROM attachments WHERE card_id=? ORDER BY position, created_at',
+                (card['id'],),
+            ).fetchall()
+            fc_ids = [r['id'] for r in conn.execute(
+                "SELECT id FROM cards WHERE parent_card_id=? AND card_type='file_card'",
+                (card['id'],),
+            ).fetchall()]
+            fc_atts = []
+            for fcid in fc_ids:
+                for r in conn.execute(
+                    'SELECT id, filename, size, mime FROM attachments WHERE card_id=?', (fcid,),
+                ).fetchall():
+                    fc_atts.append(r)
+            all_files = list(atts) + fc_atts
+            if all_files:
+                result.append({
+                    'card_id': card['id'],
+                    'card_title': card['title'],
+                    'files': [
+                        {'id': a['id'], 'name': a['filename'], 'size': a['size'], 'mime': a['mime'] or ''}
+                        for a in all_files
+                    ],
+                })
+    return {'pool': result}
